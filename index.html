@@ -35,6 +35,21 @@
   nav button:hover{background:var(--panel2); color:var(--text)}
   nav button.active{background:var(--primary); color:#fff}
 
+  /* ---- มือถือ: จัด header ใหม่ให้ nav เป็นแถบเลื่อนแนวนอนเต็มความกว้าง ---- */
+  @media(max-width:760px){
+    header{flex-wrap:wrap; padding:10px 14px; gap:10px 12px}
+    header h1{order:1; font-size:17px}
+    header h1 .logo{width:30px; height:30px; font-size:16px}
+    .userbox{order:2; margin-left:auto; padding-left:0; border-left:none; gap:8px}
+    nav{
+      order:3; width:100%; margin-left:0; flex-wrap:nowrap;
+      overflow-x:auto; -webkit-overflow-scrolling:touch; gap:4px;
+      padding-bottom:2px; scrollbar-width:none;
+    }
+    nav::-webkit-scrollbar{display:none}
+    nav button{flex:0 0 auto; white-space:nowrap; padding:8px 13px; font-size:13px}
+  }
+
   main{padding:22px; max-width:1300px; margin:0 auto}
   .view{display:none; animation:fade .2s}
   .view.active{display:block}
@@ -195,9 +210,56 @@
   .status.void{background:rgba(239,68,68,.15);color:var(--red)}
   tr.voided td{opacity:.5;text-decoration:line-through}
   tr.voided td:last-child{opacity:1;text-decoration:none}
+
+  /* ============ LOGIN / AUTH ============ */
+  #authGate{position:fixed;inset:0;z-index:500;background:var(--bg);
+    display:grid;place-items:center;padding:22px}
+  #authGate.hide{display:none}
+  .login-box{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    padding:34px 30px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .login-box .brand{display:flex;align-items:center;gap:10px;font-size:22px;font-weight:800;margin-bottom:4px}
+  .login-box .brand .logo{background:var(--primary);width:40px;height:40px;border-radius:11px;
+    display:grid;place-items:center;font-size:22px}
+  .login-box .sub{color:var(--muted);font-size:13px;margin-bottom:22px}
+  .login-box .field{margin-bottom:14px}
+  .login-box label{display:block;font-size:12px;color:var(--muted);font-weight:600;margin-bottom:5px}
+  .login-box .btn{width:100%;justify-content:center;margin-top:6px;padding:12px}
+  .login-err{background:rgba(239,68,68,.12);border:1px solid var(--red);color:var(--red);
+    border-radius:9px;padding:10px 12px;font-size:13px;margin-bottom:14px;display:none}
+  .login-err.show{display:block}
+  .login-hint{color:var(--muted);font-size:12px;text-align:center;margin-top:16px;line-height:1.6}
+  /* user badge + sync status ใน header */
+  .userbox{display:flex;align-items:center;gap:10px;margin-left:14px;padding-left:14px;border-left:1px solid var(--line)}
+  .userbox .who{display:flex;flex-direction:column;line-height:1.25}
+  .userbox .who b{font-size:13px}
+  .userbox .who small{font-size:11px;color:var(--muted)}
+  .sync-dot{width:9px;height:9px;border-radius:50%;background:var(--muted);transition:.2s;flex:0 0 auto}
+  .sync-dot.saving{background:var(--amber)}
+  .sync-dot.saved{background:var(--green)}
+  .sync-dot.error{background:var(--red)}
+  @media(max-width:640px){.userbox .who{display:none}}
 </style>
 </head>
 <body>
+<!-- ============ LOGIN GATE ============ -->
+<div id="authGate">
+  <form class="login-box" id="loginForm" onsubmit="doLogin(event)">
+    <div class="brand"><span class="logo">🛒</span> LocalPOS</div>
+    <div class="sub">เข้าสู่ระบบเพื่อใช้งาน</div>
+    <div class="login-err" id="loginErr"></div>
+    <div class="field">
+      <label>ชื่อผู้ใช้</label>
+      <input id="loginUser" autocomplete="username" autofocus required>
+    </div>
+    <div class="field">
+      <label>รหัสผ่าน</label>
+      <input id="loginPass" type="password" autocomplete="current-password" required>
+    </div>
+    <button class="btn btn-primary" id="loginBtn" type="submit">เข้าสู่ระบบ</button>
+    <div class="login-hint" id="loginHint"></div>
+  </form>
+</div>
+
 <header>
   <h1><span class="logo">🛒</span> LocalPOS</h1>
   <nav>
@@ -207,6 +269,12 @@
     <button data-view="fields">⚙️ ตั้งค่าฟิลด์</button>
     <button data-view="history">📜 ประวัติการขาย</button>
   </nav>
+  <div class="userbox" id="userBox" style="display:none">
+    <span class="sync-dot" id="syncDot" title="สถานะการบันทึกข้อมูล"></span>
+    <span class="who"><b id="whoName">—</b><small id="whoRole"></small></span>
+    <button class="btn btn-ghost btn-sm" onclick="changeMyPassword()" title="เปลี่ยนรหัสผ่าน">🔑</button>
+    <button class="btn btn-ghost btn-sm" onclick="doLogout()">ออกจากระบบ</button>
+  </div>
 </header>
 
 <main>
@@ -416,24 +484,113 @@
 
 <script>
 /* ============================================================
-   LocalPOS — ระบบขายหน้าร้านด้วย localStorage
+   LocalPOS — ระบบขายหน้าร้าน
+   ทำงาน 2 โหมด:
+     • บน Google Apps Script (มี google.script.run)  → เก็บข้อมูลบนคลาวด์ (Google Sheets)
+     • เปิดไฟล์ปกติ / เว็บทั่วไป                        → เก็บข้อมูลใน localStorage (เหมือนเดิม)
+   โครงข้อมูลเหมือนเดิม (key-value JSON) จึงไม่ต้องแก้ตรรกะการขาย/รายงาน
    ============================================================ */
-const DB = {
-  get(key, def){ try{ const v = JSON.parse(localStorage.getItem(key)); return v ?? def; }catch(e){ return def; } },
-  set(key, val){ localStorage.setItem(key, JSON.stringify(val)); }
-};
+const IS_GAS = (typeof google !== 'undefined' && google.script && google.script.run);
 const K = { PROD:'pos_products', DISC:'pos_discounts', SALES:'pos_sales', SEQ:'pos_seq', SELLERS:'pos_sellers', PAYS:'pos_payments',
             SRC:'pos_sources', PHO:'pos_photographers', PRG:'pos_programs', FIELDS:'pos_fields' };
 
-let products  = DB.get(K.PROD, []);
-let discounts = DB.get(K.DISC, []);
-let sales     = DB.get(K.SALES, []);
-let sellers   = DB.get(K.SELLERS, []);
-let payments  = DB.get(K.PAYS, []);
+/* ---- สถานะ auth + cache ข้อมูลในหน่วยความจำ ---- */
+let AUTH = { token:null, user:null };
+let _cache = {};                 // key -> ค่าที่ parse แล้ว (สแนปช็อตที่โหลดมาตอนเข้าใช้)
+
+/* DB อ่าน/เขียนจาก cache ในหน่วยความจำ; ตอน set จะ sync ขึ้น backend ให้อัตโนมัติ */
+const DB = {
+  get(key, def){ const v = _cache[key]; return (v===undefined || v===null) ? def : v; },
+  set(key, val){ _cache[key] = val; Store.persist(key, val); }
+};
+
+/* ---- ตัวกลางเก็บข้อมูล (Store) : เลือก backend ตามโหมด ---- */
+const LS_USERS = 'pos_local_users', LS_SESSION = 'pos_local_session';
+const Store = {
+  /* --- LOGIN --- */
+  login(username, password){
+    if(IS_GAS){
+      return new Promise((res)=> google.script.run
+        .withSuccessHandler(res).withFailureHandler(e=>res({ok:false,error:_gerr(e)}))
+        .login(username, password));
+    }
+    return _localLogin(username, password);
+  },
+  resume(token){
+    if(IS_GAS){
+      return new Promise((res)=> google.script.run
+        .withSuccessHandler(res).withFailureHandler(()=>res({ok:false}))
+        .resume(token));
+    }
+    const u = _localSessions()[token];
+    return Promise.resolve(u ? {ok:true, user:u} : {ok:false});
+  },
+  logout(token){
+    if(IS_GAS){ try{ google.script.run.logout(token); }catch(e){} return Promise.resolve(); }
+    const s = _localSessions(); delete s[token]; localStorage.setItem(LS_SESSION, JSON.stringify(s));
+    return Promise.resolve();
+  },
+  changePassword(token, oldPass, newPass){
+    if(IS_GAS){
+      return new Promise((res)=> google.script.run
+        .withSuccessHandler(res).withFailureHandler(e=>res({ok:false,error:_gerr(e)}))
+        .changePassword(token, oldPass, newPass));
+    }
+    return _localChangePassword(oldPass, newPass);
+  },
+  /* --- โหลดข้อมูลทั้งหมด --- */
+  loadAll(token){
+    if(IS_GAS){
+      return new Promise((res, rej)=> google.script.run
+        .withSuccessHandler(r=> r && r.ok ? res(r.data||{}) : rej(new Error((r&&r.error)||'load failed')))
+        .withFailureHandler(e=>rej(new Error(_gerr(e))))
+        .loadAll(token));
+    }
+    const out = {};
+    for(const key of Object.values(K)){
+      try{ const raw = localStorage.getItem(key); if(raw!=null) out[key] = JSON.parse(raw); }catch(e){}
+    }
+    return Promise.resolve(out);
+  },
+  /* --- บันทึก (debounce รวม batch เพื่อลดการเขียน) --- */
+  _pending:{}, _timer:null, _inflight:false,
+  persist(key, val){
+    if(!IS_GAS){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){} return; }
+    this._pending[key] = val;
+    setSync('saving');
+    clearTimeout(this._timer);
+    this._timer = setTimeout(()=>this._flush(), 700);
+  },
+  _flush(){
+    if(this._inflight){ clearTimeout(this._timer); this._timer = setTimeout(()=>this._flush(), 400); return; }
+    const batch = this._pending; const keys = Object.keys(batch);
+    if(!keys.length){ setSync('saved'); return; }
+    this._pending = {}; this._inflight = true;
+    google.script.run
+      .withSuccessHandler(()=>{ this._inflight=false;
+        if(Object.keys(this._pending).length) this._flush(); else setSync('saved'); })
+      .withFailureHandler(e=>{ this._inflight=false;
+        Object.assign(this._pending, batch);      // คืนคิวไว้ลองใหม่
+        setSync('error');
+        if(String(_gerr(e)).indexOf('SESSION_EXPIRED')>=0){ toast('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่', true); showLogin(); }
+        else { clearTimeout(this._timer); this._timer = setTimeout(()=>this._flush(), 3000); }
+      })
+      .saveMulti(AUTH.token, batch);
+  }
+};
+function _gerr(e){ return (e && e.message) ? e.message : String(e); }
+function setSync(state){ const d = $('syncDot'); if(!d) return; d.className = 'sync-dot ' + state;
+  d.title = ({saving:'กำลังบันทึก…', saved:'บันทึกแล้ว', error:'บันทึกไม่สำเร็จ'})[state] || ''; }
+
+let products  = [];
+let discounts = [];
+let sales     = [];
+let sellers   = [];
+let payments  = [];
 /* รายการที่แก้ไขได้: ที่มาลูกค้า / ช่างภาพ / โปรแกรม */
-const M = { source: DB.get(K.SRC, []), photog: DB.get(K.PHO, []), program: DB.get(K.PRG, []) };
+const M = { source: [], photog: [], program: [] };
 /* ฟิลด์ข้อมูลกำหนดเอง (info fields) — คอลัมน์บรรยายฝั่งซ้ายของรายงาน ที่ผู้ใช้เพิ่ม/ลบ/แก้ได้เอง */
-let fields    = DB.get(K.FIELDS, []);
+let fields    = [];
 let cart      = [];               // {id, name, price, qty}
 let selectedDiscountIds = [];     // เลือกได้หลายส่วนลดพร้อมกัน (เช่น Non-VAT + ส่วนลด %)
 let editProductId = null;
@@ -1541,15 +1698,145 @@ function fmtDate(iso){
 $('posSearch').oninput  = renderPosProducts;
 $('prodSearch').oninput = renderProducts;
 
-/* ============ INIT ============ */
-ensureSysFields();
-renderPosProducts();
-renderProducts();
-renderDiscounts();
-renderFields();
-renderCoCustomFields();
-renderCart();
-renderDiscountChips();
+/* ============================================================
+   AUTH — login gate + local-mode (localStorage) fallback
+   ============================================================ */
+
+/* ---- โหมดเปิดไฟล์ปกติ: เก็บผู้ใช้/เซสชันใน localStorage ----
+   หมายเหตุ: การ login ในโหมดนี้เป็นแค่กันเข้าใช้เบื้องต้น ไม่ใช่ความปลอดภัยจริง
+   (ใครเปิดไฟล์ได้ก็อ่านข้อมูลได้) ความปลอดภัยจริงอยู่บนโหมดคลาวด์ (Apps Script) */
+async function _hash(s){
+  try{
+    if(window.crypto && crypto.subtle){
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+      return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+    }
+  }catch(e){}
+  // fallback (ไม่มี crypto.subtle เช่นเปิดผ่าน file://) — hash แบบง่าย พอกันตาเท่านั้น
+  let h = 5381; for(let i=0;i<s.length;i++){ h = ((h<<5)+h + s.charCodeAt(i))|0; }
+  return 'x' + (h>>>0).toString(16);
+}
+function _localUsers(){ try{ return JSON.parse(localStorage.getItem(LS_USERS)) || {}; }catch(e){ return {}; } }
+function _localSessions(){ try{ return JSON.parse(localStorage.getItem(LS_SESSION)) || {}; }catch(e){ return {}; } }
+async function _ensureLocalAdmin(){
+  const users = _localUsers();
+  if(!Object.keys(users).length){
+    const salt = Math.random().toString(36).slice(2);
+    users['admin'] = { salt, hash: await _hash(salt+'admin123'), displayName:'ผู้ดูแลระบบ', role:'admin' };
+    localStorage.setItem(LS_USERS, JSON.stringify(users));
+  }
+}
+async function _localLogin(username, password){
+  await _ensureLocalAdmin();
+  username = String(username||'').trim().toLowerCase();
+  const users = _localUsers();
+  const u = users[username];
+  if(!u) return {ok:false, error:'ไม่พบชื่อผู้ใช้นี้'};
+  if(await _hash(u.salt+password) !== u.hash) return {ok:false, error:'รหัสผ่านไม่ถูกต้อง'};
+  const user = { username, displayName:u.displayName||username, role:u.role||'staff' };
+  const token = 'lt_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const s = _localSessions(); s[token] = user; localStorage.setItem(LS_SESSION, JSON.stringify(s));
+  return {ok:true, token, user};
+}
+async function _localChangePassword(oldPass, newPass){
+  if(!newPass || newPass.length < 4) return {ok:false, error:'รหัสผ่านใหม่ต้องยาวอย่างน้อย 4 ตัว'};
+  const users = _localUsers();
+  const u = users[AUTH.user.username];
+  if(!u) return {ok:false, error:'ไม่พบผู้ใช้'};
+  if(await _hash(u.salt+oldPass) !== u.hash) return {ok:false, error:'รหัสผ่านเดิมไม่ถูกต้อง'};
+  const salt = Math.random().toString(36).slice(2);
+  u.salt = salt; u.hash = await _hash(salt+newPass);
+  users[AUTH.user.username] = u; localStorage.setItem(LS_USERS, JSON.stringify(users));
+  return {ok:true};
+}
+
+/* ---- login UI ---- */
+const TOK_KEY = 'pos_auth_token';
+function showLogin(){
+  AUTH = { token:null, user:null };
+  try{ localStorage.removeItem(TOK_KEY); }catch(e){}
+  $('userBox').style.display = 'none';
+  $('authGate').classList.remove('hide');
+  $('loginPass').value = '';
+  setTimeout(()=>$('loginUser').focus(), 50);
+}
+function loginError(msg){ const e=$('loginErr'); e.textContent = msg; e.classList.add('show'); }
+async function doLogin(ev){
+  if(ev) ev.preventDefault();
+  $('loginErr').classList.remove('show');
+  const btn = $('loginBtn'); btn.disabled = true; btn.textContent = 'กำลังเข้าสู่ระบบ…';
+  try{
+    const r = await Store.login($('loginUser').value, $('loginPass').value);
+    if(!r || !r.ok){ loginError((r&&r.error) || 'เข้าสู่ระบบไม่สำเร็จ'); return; }
+    AUTH = { token:r.token, user:r.user };
+    try{ localStorage.setItem(TOK_KEY, r.token); }catch(e){}
+    await startApp();
+  }catch(err){ loginError('เกิดข้อผิดพลาด: ' + _gerr(err)); }
+  finally{ btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ'; }
+}
+async function doLogout(){
+  if(AUTH.token) await Store.logout(AUTH.token);
+  showLogin();
+}
+async function changeMyPassword(){
+  const oldPass = prompt('รหัสผ่านเดิม:'); if(oldPass===null) return;
+  const newPass = prompt('รหัสผ่านใหม่ (อย่างน้อย 4 ตัว):'); if(newPass===null) return;
+  const r = await Store.changePassword(AUTH.token, oldPass, newPass);
+  if(r && r.ok) toast('เปลี่ยนรหัสผ่านแล้ว ✓'); else toast((r&&r.error)||'เปลี่ยนรหัสผ่านไม่สำเร็จ', true);
+}
+
+/* ---- โหลดข้อมูลจาก backend เข้าสู่ตัวแปรในหน่วยความจำ แล้วเรนเดอร์ ---- */
+async function startApp(){
+  $('loginHint').textContent = 'กำลังโหลดข้อมูล…';
+  let snap;
+  try{ snap = await Store.loadAll(AUTH.token); }
+  catch(err){
+    if(String(_gerr(err)).indexOf('SESSION_EXPIRED')>=0){ showLogin(); return; }
+    loginError('โหลดข้อมูลไม่สำเร็จ: ' + _gerr(err)); return;
+  }
+  _cache = snap || {};
+  // populate globals จาก cache
+  products  = DB.get(K.PROD, []);
+  discounts = DB.get(K.DISC, []);
+  sales     = DB.get(K.SALES, []);
+  sellers   = DB.get(K.SELLERS, []);
+  payments  = DB.get(K.PAYS, []);
+  M.source  = DB.get(K.SRC, []);
+  M.photog  = DB.get(K.PHO, []);
+  M.program = DB.get(K.PRG, []);
+  fields    = DB.get(K.FIELDS, []);
+
+  // แสดง user badge
+  $('whoName').textContent = AUTH.user.displayName || AUTH.user.username;
+  $('whoRole').textContent = AUTH.user.role === 'admin' ? 'ผู้ดูแลระบบ' : 'พนักงาน';
+  $('userBox').style.display = 'flex';
+  setSync('saved');
+
+  ensureSysFields();
+  renderPosProducts();
+  renderProducts();
+  renderDiscounts();
+  renderFields();
+  renderCoCustomFields();
+  renderCart();
+  renderDiscountChips();
+
+  $('loginHint').textContent = '';
+  $('authGate').classList.add('hide');
+}
+
+/* ---- BOOT: ลองใช้ token เดิม (จำการเข้าสู่ระบบ) ก่อนแสดงหน้า login ---- */
+(async function boot(){
+  $('loginHint').textContent = IS_GAS ? '' : 'โหมดออฟไลน์ (localStorage) — ผู้ใช้เริ่มต้น: admin / admin123';
+  let saved = null; try{ saved = localStorage.getItem(TOK_KEY); }catch(e){}
+  if(saved){
+    try{
+      const r = await Store.resume(saved);
+      if(r && r.ok){ AUTH = { token:saved, user:r.user }; await startApp(); return; }
+    }catch(e){}
+  }
+  showLogin();
+})();
 </script>
 </body>
 </html>
