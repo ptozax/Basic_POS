@@ -1,0 +1,1555 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ระบบ POS — LocalPOS</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --panel2:#273449; --line:#334155;
+    --text:#e2e8f0; --muted:#94a3b8; --primary:#3b82f6; --primary2:#2563eb;
+    --green:#22c55e; --green2:#16a34a; --red:#ef4444; --red2:#dc2626;
+    --amber:#f59e0b; --radius:12px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:"Segoe UI",Tahoma,system-ui,sans-serif;
+    background:var(--bg); color:var(--text); min-height:100vh;
+  }
+  header{
+    background:var(--panel); border-bottom:1px solid var(--line);
+    padding:14px 22px; display:flex; align-items:center; gap:16px;
+    position:sticky; top:0; z-index:50;
+  }
+  header h1{font-size:20px; font-weight:700; display:flex; align-items:center; gap:8px}
+  header h1 .logo{
+    background:var(--primary); width:34px; height:34px; border-radius:9px;
+    display:grid; place-items:center; font-size:18px;
+  }
+  nav{display:flex; gap:6px; margin-left:auto; flex-wrap:wrap}
+  nav button{
+    background:transparent; border:1px solid transparent; color:var(--muted);
+    padding:9px 16px; border-radius:9px; cursor:pointer; font-size:14px; font-weight:600;
+    transition:.15s;
+  }
+  nav button:hover{background:var(--panel2); color:var(--text)}
+  nav button.active{background:var(--primary); color:#fff}
+
+  main{padding:22px; max-width:1300px; margin:0 auto}
+  .view{display:none; animation:fade .2s}
+  .view.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px}
+  .card + .card{margin-top:18px}
+  .card h2{font-size:16px; margin-bottom:14px; display:flex; align-items:center; gap:8px}
+
+  .grid-pos{display:grid; grid-template-columns:1fr 380px; gap:18px}
+  @media(max-width:900px){.grid-pos{grid-template-columns:1fr}}
+
+  /* form */
+  .row{display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end}
+  .field{display:flex; flex-direction:column; gap:5px; flex:1; min-width:120px}
+  .field label{font-size:12px; color:var(--muted); font-weight:600}
+  input,select{
+    background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    padding:10px 12px; border-radius:9px; font-size:14px; width:100%; font-family:inherit;
+  }
+  input:focus,select:focus{outline:none; border-color:var(--primary)}
+
+  .btn{
+    border:none; border-radius:9px; padding:10px 16px; cursor:pointer;
+    font-size:14px; font-weight:700; color:#fff; transition:.15s; white-space:nowrap;
+  }
+  .btn:hover{filter:brightness(1.1)}
+  .btn:active{transform:scale(.97)}
+  .btn-primary{background:var(--primary)}
+  .btn-green{background:var(--green)}
+  .btn-red{background:var(--red)}
+  .btn-ghost{background:var(--panel2); color:var(--text); border:1px solid var(--line)}
+  .btn-sm{padding:6px 10px; font-size:12px}
+
+  table{width:100%; border-collapse:collapse; font-size:14px}
+  th,td{padding:11px 12px; text-align:left; border-bottom:1px solid var(--line)}
+  th{color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.4px}
+  tbody tr:hover{background:var(--panel2)}
+  td.num,th.num{text-align:right}
+  .tbl-wrap{overflow-x:auto}
+
+  .search{margin-bottom:14px}
+  .empty{text-align:center; color:var(--muted); padding:34px 10px}
+
+  /* product grid for selling */
+  .prod-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:12px}
+  .prod-tile{
+    background:var(--panel2); border:1px solid var(--line); border-radius:11px;
+    padding:14px; cursor:pointer; transition:.12s; text-align:left;
+  }
+  .prod-tile:hover{border-color:var(--primary); transform:translateY(-2px)}
+  .prod-tile .pname{font-weight:700; font-size:14px; margin-bottom:6px}
+  .prod-tile .pprice{color:var(--green); font-weight:700}
+  .prod-tile .pstock{font-size:11px; color:var(--muted); margin-top:4px}
+  .prod-tile.out{opacity:.45; cursor:not-allowed}
+
+  /* cart */
+  .cart{position:sticky; top:82px}
+  .cart-items{max-height:340px; overflow-y:auto; margin:-6px 0 10px}
+  .cart-item{display:flex; align-items:center; gap:8px; padding:9px 0; border-bottom:1px solid var(--line)}
+  .cart-item .ci-name{flex:1; font-size:14px}
+  .cart-item .ci-name small{display:block; color:var(--muted); font-size:11px}
+  .qty{display:flex; align-items:center; gap:6px}
+  .qty button{width:26px; height:26px; border-radius:7px; border:1px solid var(--line);
+    background:var(--panel2); color:var(--text); cursor:pointer; font-size:15px; font-weight:700}
+  .qty span{min-width:22px; text-align:center; font-weight:700}
+  .ci-total{min-width:70px; text-align:right; font-weight:700}
+  .ci-del{background:none;border:none;color:var(--red);cursor:pointer;font-size:16px}
+
+  .summary{border-top:1px solid var(--line); padding-top:12px; font-size:14px}
+  .summary .line{display:flex; justify-content:space-between; padding:5px 0; color:var(--muted)}
+  .summary .line.total{color:var(--text); font-size:20px; font-weight:800; padding-top:10px}
+  .summary .line.total .amt{color:var(--green)}
+
+  .badge{background:var(--panel2); border:1px solid var(--line); padding:2px 9px; border-radius:20px; font-size:12px}
+  .badge.pct{color:var(--amber)} .badge.baht{color:var(--primary)}
+
+  .stat-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px; margin-bottom:18px}
+  .stat{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px}
+  .stat .lbl{color:var(--muted); font-size:13px}
+  .stat .val{font-size:26px; font-weight:800; margin-top:4px}
+
+  /* modal / toast */
+  .modal-bg{position:fixed; inset:0; background:rgba(0,0,0,.6); display:none;
+    place-items:center; z-index:100; padding:18px}
+  .modal-bg.show{display:grid}
+  .modal{background:var(--panel); border:1px solid var(--line); border-radius:14px;
+    padding:22px; max-width:560px; width:100%; max-height:88vh; overflow:auto}
+  .modal h3{margin-bottom:14px}
+  .modal .foot{display:flex; gap:10px; justify-content:flex-end; margin-top:18px}
+
+  #toast{position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+    background:var(--green2); color:#fff; padding:12px 22px; border-radius:10px;
+    font-weight:600; z-index:200; opacity:0; transition:.25s; pointer-events:none}
+  #toast.show{opacity:1}
+  #toast.err{background:var(--red2)}
+
+  .receipt{font-family:"Consolas",monospace; font-size:13px; background:var(--panel2);
+    border:1px dashed var(--line); border-radius:10px; padding:16px; white-space:pre-wrap; line-height:1.6}
+  .chk{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--text);
+    background:var(--panel2);border:1px solid var(--line);padding:10px 12px;border-radius:9px;cursor:pointer;white-space:nowrap}
+  .chk input{width:auto;margin:0;cursor:pointer}
+  .badge.vat{color:var(--green)}
+  .discount-chip{display:inline-flex;align-items:center;gap:6px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:13px}
+  .discount-chip.sel{border-color:var(--green);background:rgba(34,197,94,.12)}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+
+  .checkout-fields{display:flex;flex-direction:column;gap:8px;margin:4px 0 10px}
+  .checkout-fields .field{min-width:0}
+  .checkout-fields label{font-size:11px}
+  .checkout-fields input,.checkout-fields select{padding:8px 10px;font-size:13px}
+  .fld-row{display:flex;gap:8px}
+  .fld-row .field{flex:1}
+  /* multi-select แบบ dropdown (เลือกได้หลายอัน แต่หน้าตาเป็น dropdown) */
+  .ms{position:relative}
+  .ms-btn{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:10px 12px;
+    font-size:14px;cursor:pointer;display:flex;align-items:center;gap:8px;justify-content:space-between}
+  .ms-btn:hover{border-color:var(--primary)}
+  .ms-txt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ms-txt.ph{color:var(--muted)}
+  .ms-caret{color:var(--muted);font-size:11px;transition:.15s}
+  .ms.open .ms-btn{border-color:var(--primary)}
+  .ms.open .ms-caret{transform:rotate(180deg)}
+  .ms-pop{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:30;background:var(--panel2);
+    border:1px solid var(--primary);border-radius:9px;padding:6px;max-height:240px;overflow:auto;
+    display:none;flex-direction:column;gap:2px;box-shadow:0 10px 26px rgba(0,0,0,.45)}
+  .ms.open .ms-pop{display:flex}
+  .ms-pop .chk{border:none;background:transparent;padding:7px 9px;border-radius:7px}
+  .ms-pop .chk:hover{background:var(--panel)}
+
+  /* หน้า ⚙️ ตั้งค่าฟิลด์ — ส่วน "ตั้งค่าเพิ่มเติม" แบบพับเก็บได้ + แถบสถานะกำลังแก้ไข */
+  .adv{margin-top:12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)}
+  .adv summary{cursor:pointer;padding:10px 14px;font-size:13px;color:var(--muted);font-weight:600;user-select:none;list-style:none}
+  .adv summary::-webkit-details-marker{display:none}
+  .adv summary::before{content:'▸';margin-right:8px;display:inline-block;transition:.15s}
+  .adv[open] summary::before{transform:rotate(90deg)}
+  .adv summary:hover{color:var(--text)}
+  .adv .row{padding:2px 14px 14px}
+  .adv input,.adv select,.adv .chk{background:var(--panel)}
+  .edit-banner{display:flex;align-items:center;gap:8px;background:rgba(245,158,11,.12);
+    border:1px solid var(--amber);color:var(--amber);border-radius:9px;
+    padding:9px 14px;font-size:13px;font-weight:600;margin-bottom:12px}
+  tr.editing td{background:rgba(59,130,246,.14)}
+  /* ปุ่มสลับเปิด/ปิดในตารางฟิลด์ (คลิกได้เลย ไม่ต้องเปิดฟอร์มแก้ไข) */
+  .tog{border:1px solid var(--line);background:var(--panel2);color:var(--muted);border-radius:7px;
+    padding:4px 11px;font-size:12px;cursor:pointer;font-weight:700;transition:.12s}
+  .tog.on{background:rgba(34,197,94,.15);border-color:var(--green);color:var(--green)}
+  .tog:hover{filter:brightness(1.2)}
+  /* ลากจัดลำดับฟิลด์ */
+  .drag-handle{cursor:grab;color:var(--muted);padding:4px 7px;user-select:none;font-size:14px;display:inline-block}
+  .drag-handle:hover{color:var(--text)}
+  .drag-handle:active{cursor:grabbing}
+  tr.drag-over td{box-shadow:inset 0 2px 0 var(--primary)}
+
+  .status{display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:700}
+  .status.ok{background:rgba(34,197,94,.15);color:var(--green)}
+  .status.void{background:rgba(239,68,68,.15);color:var(--red)}
+  tr.voided td{opacity:.5;text-decoration:line-through}
+  tr.voided td:last-child{opacity:1;text-decoration:none}
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="logo">🛒</span> LocalPOS</h1>
+  <nav>
+    <button data-view="pos" class="active">💰 ขายสินค้า</button>
+    <button data-view="products">📦 สินค้า</button>
+    <button data-view="discounts">🏷️ ส่วนลด</button>
+    <button data-view="fields">⚙️ ตั้งค่าฟิลด์</button>
+    <button data-view="history">📜 ประวัติการขาย</button>
+  </nav>
+</header>
+
+<main>
+  <!-- ============ POS / SELL ============ -->
+  <section id="view-pos" class="view active">
+    <div class="grid-pos">
+      <div>
+        <div class="card">
+          <h2>🛍️ เลือกสินค้า</h2>
+          <input class="search" id="posSearch" placeholder="🔍 ค้นหาสินค้า...">
+          <div class="prod-grid" id="posProducts"></div>
+        </div>
+      </div>
+      <div>
+        <div class="card cart">
+          <h2>🧾 ตะกร้าสินค้า</h2>
+          <div class="cart-items" id="cartItems"><div class="empty">ยังไม่มีสินค้าในตะกร้า</div></div>
+
+          <div class="checkout-fields">
+            <!-- ฟิลด์ทั้งหมด (จำนวนคน / info / program / payment / sale ฯลฯ) — เรนเดอร์จากหน้า ⚙️ ตั้งค่าฟิลด์ -->
+            <div id="coCustomFields"></div>
+          </div>
+
+          <div class="chips" id="discountChips"></div>
+
+          <!-- ส่วนลดกำหนดเอง (กรอกสด ๆ ต่อบิล) — คิดต่อจากส่วนลดสำเร็จรูปที่เลือกด้านบน -->
+          <div class="fld-row" style="margin-bottom:10px">
+            <div class="field"><label style="font-size:11px;color:var(--muted);font-weight:600">ส่วนลดเอง (%)</label>
+              <input type="number" id="cdPct" min="0" max="100" step="any" placeholder="0" style="padding:8px 10px;font-size:13px" oninput="updateSummary()"></div>
+            <div class="field"><label style="font-size:11px;color:var(--muted);font-weight:600">ส่วนลดเอง (฿)</label>
+              <input type="number" id="cdBaht" min="0" step="any" placeholder="0.00" style="padding:8px 10px;font-size:13px" oninput="updateSummary()"></div>
+          </div>
+
+          <div class="summary">
+            <div class="line"><span>ยอดรวม (ก่อน VAT)</span><span id="sumSubtotal">฿0.00</span></div>
+            <div class="line" id="lineVat" style="display:none"><span id="sumVatLabel">VAT 7%</span><span id="sumVat">฿0.00</span></div>
+            <div class="line"><span>ส่วนลด</span><span id="sumDiscount" style="color:var(--amber)">-฿0.00</span></div>
+            <div class="line total"><span>สุทธิ</span><span class="amt" id="sumTotal">฿0.00</span></div>
+          </div>
+          <div class="row" style="margin-top:14px">
+            <button class="btn btn-ghost" style="flex:0 0 auto" onclick="clearCart()">ล้าง</button>
+            <button class="btn btn-green" style="flex:1" onclick="checkout()">✓ ชำระเงิน</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PRODUCTS ============ -->
+  <section id="view-products" class="view">
+    <div class="card">
+      <h2>📦 จัดการสินค้า</h2>
+      <div class="row">
+        <div class="field"><label>ชื่อสินค้า</label><input id="pName" placeholder="เช่น กาแฟเย็น"></div>
+        <div class="field" style="max-width:140px"><label>ราคา (฿)</label><input id="pPrice" type="number" min="0" step="0.01" placeholder="0.00"></div>
+        <div class="field" style="max-width:120px"><label>สต็อก</label><input id="pStock" type="number" min="0" step="1" placeholder="0"></div>
+        <div class="field" style="flex:0 0 auto;min-width:0"><label>&nbsp;</label>
+          <label class="chk" title="ติ๊ก = ขายได้ไม่จำกัด ไม่ตัดสต็อก"><input type="checkbox" id="pUnlimited" onchange="onPUnlimitedChange()"> สต็อกไม่จำกัด (∞)</label>
+        </div>
+        <div class="field" style="max-width:160px"><label>หมวดหมู่</label><input id="pCat" placeholder="เช่น เครื่องดื่ม"></div>
+        <div class="field" style="max-width:190px"><label>VAT</label>
+          <label class="chk" title="ติ๊ก = ราคารวม VAT อยู่แล้ว | ไม่ติ๊ก = ราคาไม่รวม VAT จะบวก VAT 7% ตอนจ่าย"><input type="checkbox" id="pVat"> ราคารวม VAT 7%</label>
+        </div>
+        <button class="btn btn-primary" id="pSaveBtn" onclick="saveProduct()">+ เพิ่มสินค้า</button>
+        <button class="btn btn-ghost" id="pCancelBtn" onclick="resetProductForm()" style="display:none">ยกเลิก</button>
+      </div>
+    </div>
+    <div class="card">
+      <input class="search" id="prodSearch" placeholder="🔍 ค้นหาสินค้า...">
+      <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>ชื่อสินค้า</th><th>หมวดหมู่</th><th class="num">ราคา</th><th>VAT</th><th class="num">สต็อก</th><th style="width:140px">จัดการ</th></tr></thead>
+        <tbody id="prodTable"></tbody>
+      </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DISCOUNTS ============ -->
+  <section id="view-discounts" class="view">
+    <div class="card">
+      <h2>🏷️ จัดการประเภทส่วนลด</h2>
+      <div class="row">
+        <div class="field"><label>ชื่อส่วนลด</label><input id="dName" placeholder="เช่น สมาชิก VIP"></div>
+        <div class="field" style="max-width:200px"><label>ประเภท</label>
+          <select id="dType" onchange="onDiscTypeChange()"><option value="percent">เปอร์เซ็นต์ (%)</option><option value="fixed">จำนวนเงิน (฿)</option><option value="novat">เอา VAT ออก (Non-VAT)</option></select>
+        </div>
+        <div class="field" id="dValueField" style="max-width:140px"><label>ค่าส่วนลด</label><input id="dValue" type="number" min="0" step="0.01" placeholder="0"></div>
+        <button class="btn btn-primary" id="dSaveBtn" onclick="saveDiscount()">+ เพิ่มส่วนลด</button>
+        <button class="btn btn-ghost" id="dCancelBtn" onclick="resetDiscountForm()" style="display:none">ยกเลิก</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>ชื่อส่วนลด</th><th>ประเภท</th><th class="num">ค่าส่วนลด</th><th style="width:140px">จัดการ</th></tr></thead>
+        <tbody id="discTable"></tbody>
+      </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CUSTOM FIELDS (ตั้งค่าฟิลด์) ============ -->
+  <section id="view-fields" class="view">
+    <div class="card">
+      <h2>⚙️ ตั้งค่าฟิลด์ข้อมูล (Custom Fields)</h2>
+      <p style="color:var(--muted);font-size:13px;margin:-6px 0 12px">
+        แค่กรอก <b>ชื่อฟิลด์</b> เลือก <b>ชนิดข้อมูล</b> แล้วกดเพิ่ม — ตั้งค่าสี / การแสดงผล ได้ใน "ตั้งค่าเพิ่มเติม"
+      </p>
+      <div class="edit-banner" id="fEditBanner" style="display:none">✏️ กำลังแก้ไขฟิลด์: <b id="fEditName"></b></div>
+      <div class="row">
+        <div class="field" style="min-width:200px"><label>ชื่อฟิลด์ (Label)</label><input id="fLabel" placeholder="เช่น ช่องทางจอง" onkeydown="if(event.key==='Enter')saveField()"></div>
+        <div class="field" style="max-width:190px"><label>ชนิดข้อมูล</label>
+          <select id="fType" onchange="onFieldTypeChange()">
+            <option value="text">ข้อความ (Text)</option>
+            <option value="number">ตัวเลข (Number)</option>
+            <option value="select">ตัวเลือก (Dropdown / เลือก)</option>
+            <option value="time">เวลา (Time)</option>
+          </select>
+        </div>
+        <div class="field" id="fOptionsField" style="display:none;min-width:220px">
+          <label>ตัวเลือก (คั่นด้วย ,)</label>
+          <input id="fOptions" placeholder="เช่น Walk In, OTA, Agent" onkeydown="if(event.key==='Enter')saveField()">
+        </div>
+        <button class="btn btn-primary" id="fSaveBtn" onclick="saveField()">+ เพิ่มฟิลด์</button>
+        <button class="btn btn-ghost" id="fCancelBtn" onclick="resetFieldForm()" style="display:none">ยกเลิก</button>
+      </div>
+      <details class="adv" id="fAdv">
+        <summary>ตั้งค่าเพิ่มเติม — สี, การแสดงผล, รวมยอด</summary>
+        <div class="row">
+          <div class="field" id="fSelModeField" style="display:none;max-width:190px"><label>การเลือก (Selection)</label>
+            <select id="fSelMode">
+              <option value="single">เลือกอย่างเดียว (Single)</option>
+              <option value="multi">เลือกได้หลายอัน (Multi)</option>
+            </select>
+          </div>
+          <div class="field" style="max-width:110px"><label>สีหัวคอลัมน์</label>
+            <input type="color" id="fColor" value="#66CCFF" style="height:42px;padding:4px;cursor:pointer">
+          </div>
+          <div class="field" style="flex:0 0 auto;min-width:0"><label>&nbsp;</label>
+            <label class="chk"><input type="checkbox" id="fInPos" checked> แสดงในหน้าขาย (POS)</label>
+          </div>
+          <div class="field" style="flex:0 0 auto;min-width:0"><label>&nbsp;</label>
+            <label class="chk"><input type="checkbox" id="fInExcel" checked> แสดงใน Excel</label>
+          </div>
+          <div class="field" style="flex:0 0 auto;min-width:0"><label>&nbsp;</label>
+            <label class="chk" title="ใส่ผลรวม SUM ของคอลัมน์นี้ในแถวรวมท้ายตาราง (เหมาะกับฟิลด์ตัวเลข)"><input type="checkbox" id="fSum"> รวมยอด (SUM) ท้ายตาราง</label>
+          </div>
+        </div>
+      </details>
+      <p style="color:var(--muted);font-size:12px;margin:12px 0 0">
+        คอลัมน์ในรายงาน Excel เรียงตามลำดับฟิลด์ในตารางด้านล่าง — ลากที่ ⠿ หรือกด ▲▼ เพื่อย้าย
+        &nbsp;•&nbsp; คลิกปุ่ม ✔/✕ ในช่อง Excel / หน้าขาย เพื่อเปิด-ปิดได้ทันที
+        &nbsp;•&nbsp; <b>Package / Total / Discount</b> เป็นฟิลด์ระบบ: ย้ายลำดับ ตั้งสี เปิด-ปิดใน Excel ได้ แต่ลบไม่ได้
+      </p>
+    </div>
+    <div class="card">
+      <div class="tbl-wrap">
+      <table>
+        <thead><tr><th style="width:105px">ลำดับ</th><th>ชื่อฟิลด์</th><th>ชนิด</th><th>Excel</th><th>ตัวเลือก</th><th>หน้าขาย</th><th style="width:230px">จัดการ</th></tr></thead>
+        <tbody id="fieldTable"></tbody>
+      </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ HISTORY ============ -->
+  <section id="view-history" class="view">
+    <div class="stat-grid">
+      <div class="stat"><div class="lbl">ยอดขายรวม</div><div class="val" id="statRevenue" style="color:var(--green)">฿0</div></div>
+      <div class="stat"><div class="lbl">จำนวนบิล</div><div class="val" id="statBills">0</div></div>
+      <div class="stat"><div class="lbl">ส่วนลดรวม</div><div class="val" id="statDiscount" style="color:var(--amber)">฿0</div></div>
+      <div class="stat"><div class="lbl">สินค้าที่ขายได้</div><div class="val" id="statItems">0</div></div>
+    </div>
+    <div class="card">
+      <h2 style="justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <span>📜 ประวัติการขาย</span>
+        <span style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <input type="month" id="exMonth" style="width:auto;padding:6px 10px;font-size:13px">
+          <button class="btn btn-green btn-sm" onclick="exportExcel()">⬇️ Export Excel</button>
+          <button class="btn btn-ghost btn-sm" onclick="backupDB()">💾 สำรองข้อมูล</button>
+          <button class="btn btn-ghost btn-sm" onclick="$('importFile').click()">📥 นำเข้าข้อมูล</button>
+          <button class="btn btn-red btn-sm" onclick="clearHistory()">🗑 ล้างประวัติ</button>
+          <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importDB(this)">
+        </span>
+      </h2>
+      <div class="tbl-wrap">
+      <table>
+        <thead id="histHead"><!-- คอลัมน์กลางสร้างจากฟิลด์ที่แสดงในหน้าขาย (⚙️ ตั้งค่าฟิลด์) --></thead>
+        <tbody id="histTable"></tbody>
+      </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- modal -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3 id="modalTitle">รายละเอียด</h3>
+    <div id="modalBody"></div>
+    <div class="foot"><button class="btn btn-ghost" onclick="closeModal()">ปิด</button></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ============================================================
+   LocalPOS — ระบบขายหน้าร้านด้วย localStorage
+   ============================================================ */
+const DB = {
+  get(key, def){ try{ const v = JSON.parse(localStorage.getItem(key)); return v ?? def; }catch(e){ return def; } },
+  set(key, val){ localStorage.setItem(key, JSON.stringify(val)); }
+};
+const K = { PROD:'pos_products', DISC:'pos_discounts', SALES:'pos_sales', SEQ:'pos_seq', SELLERS:'pos_sellers', PAYS:'pos_payments',
+            SRC:'pos_sources', PHO:'pos_photographers', PRG:'pos_programs', FIELDS:'pos_fields' };
+
+let products  = DB.get(K.PROD, []);
+let discounts = DB.get(K.DISC, []);
+let sales     = DB.get(K.SALES, []);
+let sellers   = DB.get(K.SELLERS, []);
+let payments  = DB.get(K.PAYS, []);
+/* รายการที่แก้ไขได้: ที่มาลูกค้า / ช่างภาพ / โปรแกรม */
+const M = { source: DB.get(K.SRC, []), photog: DB.get(K.PHO, []), program: DB.get(K.PRG, []) };
+/* ฟิลด์ข้อมูลกำหนดเอง (info fields) — คอลัมน์บรรยายฝั่งซ้ายของรายงาน ที่ผู้ใช้เพิ่ม/ลบ/แก้ได้เอง */
+let fields    = DB.get(K.FIELDS, []);
+let cart      = [];               // {id, name, price, qty}
+let selectedDiscountIds = [];     // เลือกได้หลายส่วนลดพร้อมกัน (เช่น Non-VAT + ส่วนลด %)
+let editProductId = null;
+let editDiscountId = null;
+let editFieldId = null;
+
+const uid   = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const baht  = n => '฿' + Number(n).toLocaleString('th-TH',{minimumFractionDigits:2, maximumFractionDigits:2});
+const $     = id => document.getElementById(id);
+
+function toast(msg, isErr){
+  const t = $('toast'); t.textContent = msg;
+  t.className = 'show' + (isErr ? ' err' : '');
+  clearTimeout(t._t); t._t = setTimeout(()=>t.className='', 2200);
+}
+
+function saveProducts(){ DB.set(K.PROD, products); }
+function saveDiscounts(){ DB.set(K.DISC, discounts); }
+function saveSales(){ DB.set(K.SALES, sales); }
+function saveSellers(){ DB.set(K.SELLERS, sellers); }
+function savePayments(){ DB.set(K.PAYS, payments); }
+function saveFields(){ DB.set(K.FIELDS, fields); }
+
+/* ---------- ฟิลด์กำหนดเอง (custom fields) ----------
+   • คอลัมน์ Excel = เรียงตามลำดับ field ในตาราง ⚙️ ตั้งค่าฟิลด์ (ย้ายด้วย ▲▼)
+   • ชนิด select เลือกได้: multi=true (เลือกหลายอัน → √ หลายคอลัมน์) หรือ multi=false (เลือกเดียว → 1 คอลัมน์)
+   • role ผูกกับ property เดิมของบิล: customer/source/photographer/seller/payment/program
+   • options เก็บรายชื่อในตัวเอง (ไม่พึ่ง master tab)
+   • ฟิลด์ระบบ (f.sys): package/total/remark — ย้ายลำดับ/ตั้งสี/เปิดปิด Excel ได้ แต่ลบไม่ได้
+     - package = บล็อก Pax|Price ต่อสินค้า, total = คอลัมน์สูตรรวม, remark = คอลัมน์ Discount (กรอกได้ในหน้าขาย) */
+
+/* สร้างฟิลด์ระบบให้ครบ (รันตอนเปิดแอป/นำเข้าข้อมูล) — ของเดิมที่มีอยู่แล้วไม่แตะ */
+function ensureSysFields(){
+  let changed = false;
+  if(!fields.some(f=>f.sys==='package')){
+    const i = fields.findIndex(f=>(f.section||'left')==='right');   // แทรกหลังกลุ่มฟิลด์ซ้ายเดิม
+    fields.splice(i<0?fields.length:i, 0,
+      {id:'sys_pkg', sys:'package', label:'Package', type:'', options:[], section:'left', multi:false, role:null, inPos:false, inExcel:true, color:'', sum:false, width:0});
+    changed = true;
+  }
+  if(!fields.some(f=>f.sys==='total')){
+    const i = fields.findIndex(f=>f.sys==='package');
+    fields.splice(i+1, 0,
+      {id:'sys_total', sys:'total', label:'Total', type:'', options:[], section:'left', multi:false, role:null, inPos:false, inExcel:true, color:'', sum:false, width:37.33});
+    changed = true;
+  }
+  if(!fields.some(f=>f.sys==='remark')){
+    fields.push(
+      {id:'sys_remark', sys:'remark', label:'Discount', type:'text', options:[], section:'right', multi:false, role:null, inPos:true, inExcel:true, color:'', sum:false, width:78});
+    changed = true;
+  }
+  if(changed) saveFields();
+}
+
+/* ============ NAVIGATION ============ */
+document.querySelectorAll('nav button').forEach(b=>{
+  b.onclick = ()=>{
+    document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    $('view-'+b.dataset.view).classList.add('active');
+    if(b.dataset.view==='history') renderHistory();
+    if(b.dataset.view==='pos'){ renderPosProducts(); renderCoCustomFields(); }
+    if(b.dataset.view==='fields') renderFields();
+  };
+});
+
+/* ============ PRODUCTS CRUD ============ */
+function renderProducts(){
+  const q = ($('prodSearch').value||'').toLowerCase();
+  const rows = products.filter(p=>p.name.toLowerCase().includes(q) || (p.cat||'').toLowerCase().includes(q));
+  const tb = $('prodTable');
+  if(rows.length===0){ tb.innerHTML = `<tr><td colspan="6"><div class="empty">ไม่พบสินค้า</div></td></tr>`; return; }
+  tb.innerHTML = rows.map(p=>`
+    <tr>
+      <td>${esc(p.name)}</td>
+      <td>${esc(p.cat||'-')}</td>
+      <td class="num">${baht(p.price)}</td>
+      <td>${p.vat? '<span class="badge vat">รวม VAT</span>' : '<span class="badge baht">+VAT 7%</span>'}</td>
+      <td class="num">${p.unlimited ? '<span class="badge" style="color:var(--green)">∞ ไม่จำกัด</span>' : p.stock}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm" onclick="editProduct('${p.id}')">แก้ไข</button>
+        <button class="btn btn-red btn-sm" onclick="deleteProduct('${p.id}')">ลบ</button>
+      </td>
+    </tr>`).join('');
+}
+
+/* สต็อกไม่จำกัด: ติ๊กแล้วปิดช่องกรอกจำนวน */
+function onPUnlimitedChange(){
+  const un = $('pUnlimited').checked;
+  $('pStock').disabled = un;
+  $('pStock').style.opacity = un ? .4 : 1;
+  if(un) $('pStock').value = '';
+}
+
+function saveProduct(){
+  const name = $('pName').value.trim();
+  const price = parseFloat($('pPrice').value);
+  const unlimited = $('pUnlimited').checked;
+  const stock = unlimited ? 0 : (parseInt($('pStock').value) || 0);
+  const cat = $('pCat').value.trim();
+  const vat = $('pVat').checked;
+  if(!name){ toast('กรุณากรอกชื่อสินค้า', true); return; }
+  if(isNaN(price) || price < 0){ toast('กรุณากรอกราคาให้ถูกต้อง', true); return; }
+
+  if(editProductId){
+    const p = products.find(x=>x.id===editProductId);
+    Object.assign(p, {name, price, stock, cat, vat, unlimited});
+    toast('แก้ไขสินค้าเรียบร้อย');
+  } else {
+    products.push({id:uid(), name, price, stock, cat, vat, unlimited});
+    toast('เพิ่มสินค้าเรียบร้อย');
+  }
+  saveProducts(); resetProductForm(); renderProducts(); renderPosProducts();
+}
+
+function editProduct(id){
+  const p = products.find(x=>x.id===id); if(!p) return;
+  editProductId = id;
+  $('pName').value=p.name; $('pPrice').value=p.price; $('pStock').value=p.unlimited?'':p.stock; $('pCat').value=p.cat||''; $('pVat').checked=!!p.vat;
+  $('pUnlimited').checked = !!p.unlimited; onPUnlimitedChange();
+  $('pSaveBtn').textContent='💾 บันทึกการแก้ไข'; $('pCancelBtn').style.display='';
+  $('pName').focus(); window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function deleteProduct(id){
+  const p = products.find(x=>x.id===id); if(!p) return;
+  if(!confirm(`ลบสินค้า "${p.name}" ?`)) return;
+  products = products.filter(x=>x.id!==id);
+  saveProducts(); renderProducts(); renderPosProducts(); toast('ลบสินค้าแล้ว');
+}
+
+function resetProductForm(){
+  editProductId=null;
+  ['pName','pPrice','pStock','pCat'].forEach(id=>$(id).value='');
+  $('pVat').checked=false;
+  $('pUnlimited').checked=false; onPUnlimitedChange();
+  $('pSaveBtn').textContent='+ เพิ่มสินค้า'; $('pCancelBtn').style.display='none';
+}
+
+/* ============ DISCOUNTS CRUD ============ */
+const VAT_RATE = 0.07;                                    // อัตรา VAT 7%
+const vatOf = gross => gross - gross/(1+VAT_RATE);        // มูลค่า VAT ที่รวมอยู่ในราคา (VAT-inclusive)
+function itemVat(it){                                     // แยกมูลค่าก่อน VAT และ VAT ต่อรายการ
+  const line = it.price*it.qty;
+  return it.vat
+    ? { net: line/(1+VAT_RATE), vat: vatOf(line) }        // ราคารวม VAT อยู่แล้ว → แยกออกมา
+    : { net: line,              vat: line*VAT_RATE };      // ราคาไม่รวม VAT → บวก VAT ตอนจ่าย
+}
+const discTypeLabel = t => t==='percent'?'เปอร์เซ็นต์' : t==='novat'?'เอา VAT ออก' : 'จำนวนเงิน';
+const discValueLabel = d => d.type==='percent'? d.value+'%' : d.type==='novat'? '−VAT 7%' : baht(d.value);
+function onDiscTypeChange(){ $('dValueField').style.display = $('dType').value==='novat' ? 'none' : ''; }
+
+function renderDiscounts(){
+  const tb = $('discTable');
+  if(discounts.length===0){ tb.innerHTML = `<tr><td colspan="4"><div class="empty">ยังไม่มีประเภทส่วนลด</div></td></tr>`; return; }
+  tb.innerHTML = discounts.map(d=>`
+    <tr>
+      <td>${esc(d.name)}</td>
+      <td><span class="badge ${d.type==='percent'?'pct':d.type==='novat'?'vat':'baht'}">${discTypeLabel(d.type)}</span></td>
+      <td class="num">${discValueLabel(d)}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm" onclick="editDiscount('${d.id}')">แก้ไข</button>
+        <button class="btn btn-red btn-sm" onclick="deleteDiscount('${d.id}')">ลบ</button>
+      </td>
+    </tr>`).join('');
+}
+
+function saveDiscount(){
+  const name = $('dName').value.trim();
+  const type = $('dType').value;
+  let value = parseFloat($('dValue').value);
+  if(!name){ toast('กรุณากรอกชื่อส่วนลด', true); return; }
+  if(type==='novat'){
+    value = 0;                                            // Non-VAT: คำนวณจาก VAT ในตะกร้า ไม่ต้องกรอกค่า
+  } else {
+    if(isNaN(value) || value < 0){ toast('กรุณากรอกค่าส่วนลดให้ถูกต้อง', true); return; }
+    if(type==='percent' && value > 100){ toast('เปอร์เซ็นต์ต้องไม่เกิน 100', true); return; }
+  }
+
+  if(editDiscountId){
+    const d = discounts.find(x=>x.id===editDiscountId);
+    Object.assign(d, {name, type, value});
+    toast('แก้ไขส่วนลดเรียบร้อย');
+  } else {
+    discounts.push({id:uid(), name, type, value});
+    toast('เพิ่มส่วนลดเรียบร้อย');
+  }
+  saveDiscounts(); resetDiscountForm(); renderDiscounts(); renderDiscountChips();
+}
+
+function editDiscount(id){
+  const d = discounts.find(x=>x.id===id); if(!d) return;
+  editDiscountId = id;
+  $('dName').value=d.name; $('dType').value=d.type; $('dValue').value=d.value; onDiscTypeChange();
+  $('dSaveBtn').textContent='💾 บันทึกการแก้ไข'; $('dCancelBtn').style.display='';
+  $('dName').focus(); window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function deleteDiscount(id){
+  const d = discounts.find(x=>x.id===id); if(!d) return;
+  if(!confirm(`ลบส่วนลด "${d.name}" ?`)) return;
+  discounts = discounts.filter(x=>x.id!==id);
+  selectedDiscountIds = selectedDiscountIds.filter(x=>x!==id);
+  saveDiscounts(); renderDiscounts(); renderDiscountChips(); updateSummary(); toast('ลบส่วนลดแล้ว');
+}
+
+function resetDiscountForm(){
+  editDiscountId=null;
+  $('dName').value=''; $('dValue').value=''; $('dType').value='percent'; onDiscTypeChange();
+  $('dSaveBtn').textContent='+ เพิ่มส่วนลด'; $('dCancelBtn').style.display='none';
+}
+
+/* ============ (ยุบแล้ว) ผู้ขาย/วิธีชำระเงิน/ที่มาลูกค้า/ช่างภาพ/โปรแกรม → จัดการที่หน้า ⚙️ ตั้งค่าฟิลด์ ============ */
+
+/* ============ CUSTOM FIELDS (ฟิลด์กำหนดเอง) CRUD ============ */
+const fieldTypeLabel = t => ({text:'ข้อความ', number:'ตัวเลข', select:'ตัวเลือก', time:'เวลา', program:'โปรแกรม'}[t] || t);
+const hasOptions = t => t==='select' || t==='program';       // ชนิดที่มีรายการตัวเลือก
+function fieldOptions(f){ return Array.isArray(f.options) ? f.options : []; }
+const isMulti = f => f.type==='select' && !!f.multi;          // select แบบเลือกได้หลายอัน (Excel = ติ๊ก √ หลายคอลัมน์)
+function onFieldTypeChange(){
+  const t = $('fType').value;
+  $('fOptionsField').style.display = hasOptions(t) ? '' : 'none';
+  $('fSelModeField').style.display = t==='select' ? '' : 'none';
+}
+
+const sysTypeLabel = s => ({package:'บล็อก Pax/Price ต่อสินค้า', total:'สูตรรวม (คำนวณ)', remark:'ข้อความ (หมายเหตุ/ส่วนลด)'}[s] || s);
+function renderFields(){
+  const tb = $('fieldTable');
+  if(fields.length===0){ tb.innerHTML = `<tr><td colspan="7"><div class="empty">ยังไม่มีฟิลด์กำหนดเอง</div></td></tr>`; return; }
+  tb.innerHTML = fields.map((f,i)=>{
+    const excelInfo = (f.type==='select' ? (isMulti(f)?' · เลือกหลาย (√)':'') : '') + (f.sum ? ' · Σ รวม' : '');
+    const excelTog = `<button class="tog${f.inExcel?' on':''}" onclick="toggleFieldProp('${f.id}','inExcel')" title="คลิกเพื่อเปิด/ปิดคอลัมน์นี้ใน Excel">${f.inExcel?'✔':'✕'}</button>`
+      + (f.inExcel && excelInfo ? `<span style="font-size:11px;color:var(--muted);margin-left:5px">${excelInfo}</span>` : '');
+    // ฟิลด์ระบบ (ยกเว้น Discount/remark) ปรับการแสดงในหน้าขายไม่ได้
+    const posTog = (f.sys && f.sys!=='remark') ? '<span style="color:var(--muted)">—</span>'
+      : `<button class="tog${f.inPos?' on':''}" onclick="toggleFieldProp('${f.id}','inPos')" title="คลิกเพื่อเปิด/ปิดช่องนี้ในหน้าขาย">${f.inPos?'✔':'✕'}</button>`;
+    const dot = normColor(f.color) ? `<span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#${normColor(f.color)};border:1px solid var(--line);vertical-align:middle;margin-right:5px"></span>` : '';
+    return `
+    <tr${f.id===editFieldId?' class="editing"':''} ondragover="fDragOver(event)" ondragleave="fDragLeave(event)" ondrop="fDrop(event,'${f.id}')">
+      <td style="white-space:nowrap">
+        <span class="drag-handle" draggable="true" ondragstart="fDragStart(event,'${f.id}')" title="ลากเพื่อจัดลำดับ">⠿</span>
+        <button class="btn btn-ghost btn-sm" ${i===0?'disabled style="opacity:.3"':''} onclick="moveField('${f.id}',-1)">▲</button>
+        <button class="btn btn-ghost btn-sm" ${i===fields.length-1?'disabled style="opacity:.3"':''} onclick="moveField('${f.id}',1)">▼</button>
+      </td>
+      <td>${dot}${esc(f.label)}${f.role?` <span class="badge">${esc(f.role)}</span>`:''}${f.sys?' <span class="badge" style="color:var(--amber)">ระบบ</span>':''}</td>
+      <td><span class="badge">${f.sys ? sysTypeLabel(f.sys) : fieldTypeLabel(f.type)+(f.type==='select'?(isMulti(f)?' · หลาย':' · เดียว'):'')}</span></td>
+      <td>${excelTog}</td>
+      <td style="color:var(--muted);font-size:12px">${hasOptions(f.type) ? esc(fieldOptions(f).join(', ')||'-') : '-'}</td>
+      <td>${posTog}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-ghost btn-sm" onclick="editField('${f.id}')">แก้ไข</button>
+        ${f.sys?'':`<button class="btn btn-ghost btn-sm" onclick="duplicateField('${f.id}')" title="สร้างฟิลด์ใหม่จากการตั้งค่าเดิม">คัดลอก</button>
+        <button class="btn btn-red btn-sm" onclick="deleteField('${f.id}')">ลบ</button>`}
+      </td>
+    </tr>`; }).join('');
+}
+
+/* สลับ เปิด/ปิด หน้าขาย-Excel จากตารางโดยตรง */
+function toggleFieldProp(id, prop){
+  const f = fields.find(x=>x.id===id); if(!f) return;
+  if(prop==='inPos' && f.sys && f.sys!=='remark') return;
+  f[prop] = !f[prop];
+  // ถ้ากำลังแก้ไขฟิลด์นี้อยู่ในฟอร์ม ให้ค่าใน checkbox ตรงกันด้วย
+  if(editFieldId===id){ $('fInPos').checked = !!f.inPos; $('fInExcel').checked = !!f.inExcel; }
+  saveFields(); renderFields(); renderCoCustomFields();
+}
+
+/* คัดลอกฟิลด์ (เฉพาะฟิลด์ที่ผู้ใช้สร้างเอง) */
+function duplicateField(id){
+  const i = fields.findIndex(x=>x.id===id); if(i<0) return;
+  const f = fields[i];
+  if(f.sys){ toast('ฟิลด์ระบบคัดลอกไม่ได้', true); return; }
+  const nf = {...f, id:uid(), label:f.label+' (สำเนา)', role:null, options:[...(f.options||[])]};
+  delete nf.sys;
+  fields.splice(i+1, 0, nf);
+  saveFields(); renderFields(); renderCoCustomFields(); toast('คัดลอกฟิลด์แล้ว — กด "แก้ไข" เพื่อเปลี่ยนชื่อ');
+}
+
+/* ---------- ลากจัดลำดับฟิลด์ (drag & drop) ---------- */
+let dragFieldId = null;
+function fDragStart(e, id){ dragFieldId = id; e.dataTransfer.effectAllowed = 'move'; }
+function fDragOver(e){ if(!dragFieldId) return; e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
+function fDragLeave(e){ e.currentTarget.classList.remove('drag-over'); }
+function fDrop(e, targetId){
+  e.preventDefault(); e.currentTarget.classList.remove('drag-over');
+  if(!dragFieldId || dragFieldId===targetId){ dragFieldId=null; return; }
+  const from = fields.findIndex(x=>x.id===dragFieldId);
+  const to = fields.findIndex(x=>x.id===targetId);
+  dragFieldId = null;
+  if(from<0 || to<0) return;
+  const [m] = fields.splice(from, 1);
+  fields.splice(to, 0, m);
+  saveFields(); renderFields(); renderCoCustomFields();
+}
+
+function parseOptions(raw){
+  return String(raw||'').split(/[\n,]/).map(s=>s.trim()).filter(Boolean);
+}
+/* ทำให้สีเป็นรูปแบบ 6 หลัก (ไม่มี #) ; ค่าที่ไม่ถูกต้อง → '' (ใช้สี default) */
+const normColor = c => { if(!c) return ''; const h = String(c).replace(/^#/,'').trim(); return /^[0-9a-fA-F]{6}$/.test(h) ? h.toUpperCase() : ''; };
+
+/* ปรับฟอร์มตามโหมด: 'new'/'edit' = ครบทุกช่อง, 'sys' = เหลือ ชื่อ/สี/Excel (+หน้าขาย เฉพาะ Discount) */
+function setFieldFormMode(mode, f){
+  const sys = mode==='sys';
+  const show = (id, on)=>{ const el = $(id); const w = el && el.closest('.field'); if(w) w.style.display = on ? '' : 'none'; };
+  show('fType', !sys);
+  show('fSum', !sys);
+  show('fInPos', !sys || (f && f.sys==='remark'));
+  if(sys){ $('fOptionsField').style.display='none'; $('fSelModeField').style.display='none'; }
+  else onFieldTypeChange();
+}
+
+function saveField(){
+  const label = $('fLabel').value.trim();
+  if(!label){ toast('กรุณากรอกชื่อฟิลด์', true); return; }
+  const inExcel = $('fInExcel').checked;
+  const color = normColor($('fColor').value);
+
+  const editing = editFieldId ? fields.find(x=>x.id===editFieldId) : null;
+  if(editing && editing.sys){
+    // ฟิลด์ระบบ: แก้ได้เฉพาะชื่อ/สี/แสดงใน Excel (+หน้าขาย เฉพาะ Discount)
+    Object.assign(editing, {label, color, inExcel});
+    if(editing.sys==='remark') editing.inPos = $('fInPos').checked;
+    toast('แก้ไขฟิลด์เรียบร้อย');
+    saveFields(); resetFieldForm(); renderFields(); renderCoCustomFields();
+    return;
+  }
+
+  const type  = $('fType').value;
+  const options = hasOptions(type) ? parseOptions($('fOptions').value) : [];
+  const multi = (type==='select') && $('fSelMode').value==='multi';
+  const inPos = $('fInPos').checked;
+  const sum = $('fSum').checked;
+
+  if(editing){
+    Object.assign(editing, {label, type, options, multi, inPos, inExcel, color, sum});
+    toast('แก้ไขฟิลด์เรียบร้อย');
+  } else {
+    const nf = {id:uid(), label, type, options, multi, role:null, inPos, inExcel, color, sum, width:22};
+    // ฟิลด์ใหม่แทรกก่อนบล็อก Package — ย้ายตำแหน่งได้ด้วยการลาก ⠿ หรือปุ่ม ▲▼
+    const at = fields.findIndex(f=>f.sys==='package');
+    if(at<0) fields.push(nf); else fields.splice(at, 0, nf);
+    toast('เพิ่มฟิลด์เรียบร้อย — ลาก ⠿ เพื่อย้ายตำแหน่งได้');
+  }
+  saveFields(); resetFieldForm(); renderFields(); renderCoCustomFields();
+}
+
+function editField(id){
+  const f = fields.find(x=>x.id===id); if(!f) return;
+  editFieldId = id;
+  $('fLabel').value = f.label; $('fType').value = f.type || 'text';
+  $('fOptions').value = (f.options||[]).join(', ');
+  $('fSelMode').value = isMulti(f) ? 'multi' : 'single';
+  $('fInPos').checked = !!f.inPos; $('fInExcel').checked = !!f.inExcel;
+  $('fColor').value = '#' + (normColor(f.color) || '66CCFF');
+  $('fSum').checked = !!f.sum;
+  setFieldFormMode(f.sys ? 'sys' : 'edit', f);
+  $('fEditBanner').style.display=''; $('fEditName').textContent = f.label;
+  $('fAdv').open = true;                       // เปิดตั้งค่าเพิ่มเติมให้เห็นค่าปัจจุบันตอนแก้ไข
+  renderFields();                              // ไฮไลต์แถวที่กำลังแก้ไข
+  $('fSaveBtn').textContent='💾 บันทึกการแก้ไข'; $('fCancelBtn').style.display='';
+  $('fLabel').focus(); window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function deleteField(id){
+  const f = fields.find(x=>x.id===id); if(!f) return;
+  if(f.sys){ toast('ฟิลด์ระบบลบไม่ได้ — ปิด "แสดงใน Excel" แทนได้', true); return; }
+  if(!confirm(`ลบฟิลด์ "${f.label}" ?\nข้อมูลในบิลเก่ายังอยู่ แต่จะไม่แสดงเป็นคอลัมน์อีก`)) return;
+  if(editFieldId===id) resetFieldForm();       // กำลังแก้ไขฟิลด์นี้อยู่ → เคลียร์ฟอร์มก่อน
+  fields = fields.filter(x=>x.id!==id);
+  saveFields(); renderFields(); renderCoCustomFields(); toast('ลบฟิลด์แล้ว');
+}
+
+function moveField(id, dir){
+  const i = fields.findIndex(x=>x.id===id); if(i<0) return;
+  const j = i + dir; if(j<0 || j>=fields.length) return;
+  [fields[i], fields[j]] = [fields[j], fields[i]];
+  saveFields(); renderFields(); renderCoCustomFields();
+}
+
+function resetFieldForm(){
+  const wasEditing = !!editFieldId;
+  editFieldId = null;
+  $('fLabel').value=''; $('fOptions').value='';
+  $('fType').value='text'; $('fSelMode').value='single';
+  $('fInPos').checked=true; $('fInExcel').checked=true;
+  $('fColor').value='#66CCFF'; $('fSum').checked=false;
+  setFieldFormMode('new');
+  $('fEditBanner').style.display='none';
+  $('fAdv').open = false;
+  if(wasEditing) renderFields();               // เอาไฮไลต์แถวที่แก้ไขออก
+  $('fSaveBtn').textContent='+ เพิ่มฟิลด์'; $('fCancelBtn').style.display='none';
+}
+
+/* ---------- multi-select dropdown (หน้าขาย) ---------- */
+function msLabel(ms){                                        // อัปเดตข้อความในกล่องตามที่ติ๊ก
+  const sel = [...ms.querySelectorAll('input:checked')].map(i=>i.value);
+  const txt = ms.querySelector('.ms-txt');
+  txt.textContent = sel.length ? sel.join(', ') : '— ไม่ระบุ —';
+  txt.classList.toggle('ph', sel.length===0);
+}
+function msToggle(btn){                                      // เปิด/ปิดรายการ (ปิดอันอื่นก่อน)
+  const ms = btn.closest('.ms'); const open = ms.classList.contains('open');
+  document.querySelectorAll('.ms.open').forEach(x=>x.classList.remove('open'));
+  if(!open) ms.classList.add('open');
+}
+function msSync(input){ msLabel(input.closest('.ms')); }
+/* คลิกนอกกล่อง = ปิดรายการที่เปิดอยู่ */
+document.addEventListener('click', e=>{ if(!e.target.closest('.ms')) document.querySelectorAll('.ms.open').forEach(x=>x.classList.remove('open')); });
+
+/* อ่านค่าฟิลด์ 1 อันจากหน้าขาย — multi = รวมค่าที่ติ๊กด้วย ", " ; อื่น ๆ = ค่าของ control */
+function getCoFieldValue(f){
+  if(isMulti(f)){
+    return [...document.querySelectorAll(`#coCustomFields input[data-fid="${f.id}"]:checked`)].map(el=>el.value).join(', ');
+  }
+  const el = document.querySelector(`#coCustomFields [data-fid="${f.id}"]`);
+  return el ? (el.value||'').trim() : '';
+}
+
+/* เรนเดอร์ช่องกรอกในหน้าขายจากฟิลด์ที่ inPos (คงค่าที่พิมพ์ไว้เมื่อ re-render) */
+function renderCoCustomFields(){
+  const wrap = $('coCustomFields'); if(!wrap) return;
+  const list = fields.filter(f=>f.inPos);
+  const prev = {};
+  list.forEach(f=>{ prev[f.id] = getCoFieldValue(f); });
+  if(list.length===0){ wrap.innerHTML=''; return; }
+  // จัดเรียงทีละ 2 ช่องต่อแถว
+  let html = '';
+  for(let i=0;i<list.length;i+=2){
+    html += '<div class="fld-row">';
+    for(let j=i;j<Math.min(i+2,list.length);j++){
+      const f = list[j];
+      const val = prev[f.id] ?? '';
+      let ctrl;
+      if(isMulti(f)){
+        const selArr = String(val).split(/[\n,]/).map(s=>s.trim()).filter(Boolean);
+        const selSet = new Set(selArr);
+        const boxes = fieldOptions(f)
+          .map(o=>`<label class="chk"><input type="checkbox" data-fid="${f.id}" value="${esc(o)}"${selSet.has(o)?' checked':''} onchange="msSync(this)"> ${esc(o)}</label>`)
+          .join('');
+        const txt = selArr.length ? selArr.join(', ') : '— ไม่ระบุ —';
+        ctrl = `<div class="ms">`
+          + `<div class="ms-btn" onclick="msToggle(this)"><span class="ms-txt${selArr.length?'':' ph'}">${esc(txt)}</span><span class="ms-caret">▾</span></div>`
+          + `<div class="ms-pop">${boxes || '<small style="color:var(--muted);padding:6px 8px">— ยังไม่มีตัวเลือก —</small>'}</div>`
+          + `</div>`;
+      } else if(f.type==='select'){
+        const opts = ['<option value="">— ไม่ระบุ —</option>']
+          .concat(fieldOptions(f).map(o=>`<option value="${esc(o)}"${o===val?' selected':''}>${esc(o)}</option>`)).join('');
+        ctrl = `<select data-fid="${f.id}">${opts}</select>`;
+      } else if(f.type==='time'){
+        ctrl = `<input type="time" data-fid="${f.id}" value="${esc(val)}">`;
+      } else if(f.type==='number'){
+        const numAttr = f.role==='pax' ? 'min="1" step="1" placeholder="1"' : 'step="any"';
+        ctrl = `<input type="number" ${numAttr} data-fid="${f.id}" value="${esc(val)}">`;
+      } else {
+        const ph = f.sys==='remark' ? ' placeholder="เว้นว่าง = ใส่ชื่อส่วนลดอัตโนมัติ"'
+                 : f.role==='customer' ? ' placeholder="Walk In"' : '';
+        ctrl = `<input type="text" data-fid="${f.id}" value="${esc(val)}"${ph}>`;
+      }
+      html += `<div class="field"><label>${esc(f.label)}</label>${ctrl}</div>`;
+    }
+    html += '</div>';
+  }
+  wrap.innerHTML = html;
+}
+
+/* ============ POS / SELLING ============ */
+function renderPosProducts(){
+  const q = ($('posSearch').value||'').toLowerCase();
+  const list = products.filter(p=>p.name.toLowerCase().includes(q) || (p.cat||'').toLowerCase().includes(q));
+  const el = $('posProducts');
+  if(list.length===0){ el.innerHTML = `<div class="empty" style="grid-column:1/-1">ไม่มีสินค้า — เพิ่มได้ที่เมนู "สินค้า"</div>`; return; }
+  el.innerHTML = list.map(p=>{
+    const out = !p.unlimited && p.stock<=0;
+    return `<div class="prod-tile ${out?'out':''}" ${out?'':`onclick="addToCart('${p.id}')"`}>
+      <div class="pname">${esc(p.name)}</div>
+      <div class="pprice">${baht(p.price)}</div>
+      <div class="pstock">${p.unlimited?'∞ ไม่จำกัด':(out?'สินค้าหมด':'คงเหลือ '+p.stock)}</div>
+    </div>`;
+  }).join('');
+}
+
+function addToCart(id){
+  const p = products.find(x=>x.id===id); if(!p) return;
+  const item = cart.find(x=>x.id===id);
+  const inCart = item ? item.qty : 0;
+  if(!p.unlimited && inCart >= p.stock){ toast('สต็อกไม่พอ', true); return; }
+  if(item) item.qty++;
+  else cart.push({id:p.id, name:p.name, price:p.price, qty:1, vat:!!p.vat});
+  renderCart();
+}
+
+function changeQty(id, delta){
+  const item = cart.find(x=>x.id===id); if(!item) return;
+  const p = products.find(x=>x.id===id);
+  const next = item.qty + delta;
+  if(next<=0){ cart = cart.filter(x=>x.id!==id); }
+  else if(p && !p.unlimited && next > p.stock){ toast('สต็อกไม่พอ', true); return; }
+  else item.qty = next;
+  renderCart();
+}
+
+function removeFromCart(id){ cart = cart.filter(x=>x.id!==id); renderCart(); }
+function clearCart(){
+  cart=[]; selectedDiscountIds=[];
+  $('cdPct').value=''; $('cdBaht').value='';
+  document.querySelectorAll('#coCustomFields [data-fid]').forEach(el=>{ if(el.type==='checkbox') el.checked=false; else el.value=''; });
+  document.querySelectorAll('#coCustomFields .ms').forEach(msLabel);
+  renderCart(); renderDiscountChips();
+}
+
+function renderCart(){
+  const el = $('cartItems');
+  if(cart.length===0){ el.innerHTML = `<div class="empty">ยังไม่มีสินค้าในตะกร้า</div>`; updateSummary(); return; }
+  el.innerHTML = cart.map(it=>`
+    <div class="cart-item">
+      <div class="ci-name">${esc(it.name)}<small>${baht(it.price)} / ชิ้น</small></div>
+      <div class="qty">
+        <button onclick="changeQty('${it.id}',-1)">−</button>
+        <span>${it.qty}</span>
+        <button onclick="changeQty('${it.id}',1)">+</button>
+      </div>
+      <div class="ci-total">${baht(it.price*it.qty)}</div>
+      <button class="ci-del" onclick="removeFromCart('${it.id}')">🗑</button>
+    </div>`).join('');
+  updateSummary();
+}
+
+function renderDiscountChips(){
+  const el = $('discountChips');
+  if(discounts.length===0){ el.innerHTML=''; return; }
+  el.innerHTML = discounts.map(d=>`
+    <div class="discount-chip ${selectedDiscountIds.includes(d.id)?'sel':''}" onclick="toggleDiscount('${d.id}')">
+      ${selectedDiscountIds.includes(d.id)?'✓ ':''}${esc(d.name)} <small style="color:var(--muted)">(${discValueLabel(d)})</small>
+    </div>`).join('');
+}
+
+function toggleDiscount(id){
+  const i = selectedDiscountIds.indexOf(id);
+  if(i>=0) selectedDiscountIds.splice(i,1);
+  else selectedDiscountIds.push(id);
+  renderDiscountChips(); updateSummary();
+}
+
+function calcTotals(){
+  let subtotal = 0, vatTotal = 0;                        // subtotal = ยอดก่อน VAT, vatTotal = VAT ทั้งหมด
+  cart.forEach(it=>{ const v = itemVat(it); subtotal += v.net; vatTotal += v.vat; });
+  const discs = discounts.filter(d=>selectedDiscountIds.includes(d.id));   // เลือกได้หลายอันพร้อมกัน
+  const hasNovat = discs.some(d=>d.type==='novat');
+  const vat = hasNovat ? 0 : vatTotal;                   // มี Non-VAT = ยกเว้น VAT (ไม่คิด/ไม่บวก)
+  // ส่วนลด % / บาท คิดจากยอดที่ต้องจ่าย (ก่อน VAT + VAT)
+  let running = subtotal + vat, discount = 0;
+  discs.forEach(d=>{
+    if(d.type==='percent'){ const x = running*d.value/100; discount += x; running -= x; }
+    else if(d.type==='fixed'){ const x = Math.min(d.value, running); discount += x; running -= x; }
+  });
+  // ส่วนลดกำหนดเอง (กรอกในหน้าขาย) — % ก่อน แล้วค่อยหักบาท คิดต่อจากส่วนลดสำเร็จรูป
+  const customPct  = Math.min(100, Math.max(0, parseFloat($('cdPct').value)  || 0));
+  const customBaht = Math.max(0, parseFloat($('cdBaht').value) || 0);
+  if(customPct>0){ const x = running*customPct/100; discount += x; running -= x; }
+  if(customBaht>0){ const x = Math.min(customBaht, running); discount += x; running -= x; }
+  return { subtotal, vat, discount, total: running, discs, hasNovat, customPct, customBaht };
+}
+
+function updateSummary(){
+  const {subtotal, vat, discount, total, hasNovat} = calcTotals();
+  $('sumSubtotal').textContent = baht(subtotal);
+  $('sumVat').textContent = baht(vat);
+  $('sumVatLabel').textContent = hasNovat ? 'VAT 7% (ยกเว้น)' : 'VAT 7%';
+  $('sumDiscount').textContent = '-' + baht(discount);
+  $('sumTotal').textContent = baht(total);
+  $('lineVat').style.display = cart.length ? '' : 'none';
+}
+
+function checkout(){
+  if(cart.length===0){ toast('ตะกร้าว่าง', true); return; }
+  const {subtotal, discount, total, discs, vat, hasNovat, customPct, customBaht} = calcTotals();
+  // ชื่อส่วนลดของบิล = ส่วนลดสำเร็จรูปที่เลือก + ส่วนลดกำหนดเอง (ถ้ามี)
+  const discNames = discs.map(d=>d.name);
+  if(customPct>0)  discNames.push(customPct+'%');
+  if(customBaht>0) discNames.push(baht(customBaht));
+
+  // deduct stock (สินค้าสต็อกไม่จำกัด ไม่ต้องตัด)
+  cart.forEach(it=>{ const p=products.find(x=>x.id===it.id); if(p && !p.unlimited) p.stock -= it.qty; });
+
+  // เก็บค่าฟิลด์กำหนดเอง + ดึงค่าตาม role ไปใส่ property เดิม (ให้ประวัติ/ใบเสร็จ/Excel เดิมทำงานได้)
+  const fieldVals = {};
+  fields.filter(f=>f.inPos).forEach(f=>{ fieldVals[f.id] = getCoFieldValue(f); });
+  const byRole = r => { const f = fields.find(x=>x.role===r); return f ? (fieldVals[f.id]||'') : ''; };
+
+  const seq = (DB.get(K.SEQ,0)) + 1; DB.set(K.SEQ, seq);
+  const sale = {
+    id: uid(),
+    no: 'INV-' + String(seq).padStart(5,'0'),
+    date: new Date().toISOString(),
+    items: cart.map(it=>({productId:it.id, name:it.name, price:it.price, qty:it.qty, total:it.price*it.qty, vat:!!it.vat})),
+    subtotal, discount, total, vat, vatWaived: hasNovat,
+    discountName: discNames.length ? discNames.join(' + ') : null,
+    itemCount: cart.reduce((s,it)=>s+it.qty,0),
+    fields: fieldVals,
+    customer: byRole('customer').trim() || 'Walk In',
+    pax: parseInt(byRole('pax')) || 1,
+    payment: byRole('payment'),
+    seller: byRole('seller') || '-',
+    source: byRole('source').trim(),
+    photographer: byRole('photographer').trim(),
+    ride: byRole('program'),
+    status: 'completed'
+  };
+  sales.unshift(sale);
+  saveSales(); saveProducts();
+
+  showReceipt(sale);
+  clearCart(); renderPosProducts();
+  toast('บันทึกการขายเรียบร้อย ✓');
+}
+
+/* ============ HISTORY ============ */
+const isVoid = s => s.status === 'refunded';
+
+/* ข้อความ Discount ของบิล (ตรงกับคอลัมน์ Discount ใน Excel): ที่กรอกเองในหน้าขาย > ชื่อส่วนลดของบิล */
+function saleDiscountText(s){
+  const f = fields.find(x=>x.sys==='remark');
+  const typed = (f && s.fields && s.fields[f.id] != null) ? String(s.fields[f.id]).trim() : '';
+  return typed || s.discountName || '';
+}
+
+/* ค่า field ของบิลสำหรับแสดงผล — บิลเก่าที่ไม่มีค่า fallback ตาม role ไป property เดิม */
+function saleFieldVal(s, f){
+  let val = (s.fields && s.fields[f.id] != null) ? s.fields[f.id] : '';
+  if(val === '' && f.role){
+    val = f.role==='customer' ? (s.customer||'') : f.role==='seller' ? (s.seller||'') :
+          f.role==='payment' ? (s.payment||'') : f.role==='source' ? (s.source||'') :
+          f.role==='photographer' ? (s.photographer||'') : f.role==='program' ? (s.ride||'') :
+          f.role==='pax' ? (s.pax!=null ? s.pax : '') : '';
+  }
+  return String(val);
+}
+/* ฟิลด์ที่ใช้เป็นคอลัมน์กลางของตารางประวัติ = ฟิลด์ที่กรอกในหน้าขาย (ไม่รวมฟิลด์ระบบ) */
+const histFields = () => fields.filter(f=>!f.sys && f.inPos);
+
+function renderHistory(){
+  // ตั้งค่าเดือนเริ่มต้นให้ช่องเลือกเดือน = เดือนปัจจุบัน (ครั้งแรก)
+  if(!$('exMonth').value){
+    const t = new Date();
+    $('exMonth').value = t.getFullYear() + '-' + String(t.getMonth()+1).padStart(2,'0');
+  }
+  const active = sales.filter(s=>!isVoid(s));
+  const revenue  = active.reduce((s,x)=>s+x.total,0);
+  const totalDisc= active.reduce((s,x)=>s+x.discount,0);
+  const totalItm = active.reduce((s,x)=>s+x.itemCount,0);
+  $('statRevenue').textContent = baht(revenue);
+  $('statBills').textContent   = active.length;
+  $('statDiscount').textContent= baht(totalDisc);
+  $('statItems').textContent   = totalItm;
+
+  const hf = histFields();
+  $('histHead').innerHTML = `<tr><th>เลขที่บิล</th><th>วันที่/เวลา</th>`
+    + hf.map(f=>`<th>${esc(f.label)}</th>`).join('')
+    + `<th class="num">ชิ้น</th><th class="num">ส่วนลด / Discount</th><th class="num">ยอดสุทธิ</th><th>สถานะ</th><th style="width:170px">จัดการ</th></tr>`;
+  const tb = $('histTable');
+  if(sales.length===0){ tb.innerHTML = `<tr><td colspan="${7+hf.length}"><div class="empty">ยังไม่มีประวัติการขาย</div></td></tr>`; return; }
+  tb.innerHTML = sales.map(s=>`
+    <tr class="${isVoid(s)?'voided':''}">
+      <td><b>${s.no}</b></td>
+      <td>${fmtDate(s.date)}</td>
+      ${hf.map(f=>`<td>${esc(saleFieldVal(s,f)||'-')}</td>`).join('')}
+      <td class="num">${s.itemCount}</td>
+      <td class="num" style="color:var(--amber)">${s.discount>0?'-'+baht(s.discount):'-'}${saleDiscountText(s)?`<small style="display:block;color:var(--muted);font-size:11px;font-weight:400">${esc(saleDiscountText(s))}</small>`:''}</td>
+      <td class="num" style="color:var(--green);font-weight:700">${baht(s.total)}</td>
+      <td><span class="status ${isVoid(s)?'void':'ok'}">${isVoid(s)?'ยกเลิก/คืนเงิน':'สำเร็จ'}</span></td>
+      <td>
+        <button class="btn btn-ghost btn-sm" onclick="viewSale('${s.id}')">ดูบิล</button>
+        ${isVoid(s) ? '' : `<button class="btn btn-red btn-sm" onclick="voidSale('${s.id}')">ยกเลิก</button>`}
+      </td>
+    </tr>`).join('');
+}
+
+function voidSale(id){
+  const s = sales.find(x=>x.id===id); if(!s || isVoid(s)) return;
+  if(!confirm(`ยกเลิก/คืนเงินบิล ${s.no}?\nระบบจะคืนสต็อกสินค้ากลับเข้าคลังให้อัตโนมัติ`)) return;
+  // restore stock (match by id, fall back to name) — สินค้าสต็อกไม่จำกัด ไม่ต้องคืน
+  s.items.forEach(it=>{
+    const p = products.find(x=>x.id===it.productId) || products.find(x=>x.name===it.name);
+    if(p && !p.unlimited) p.stock += it.qty;
+  });
+  s.status = 'refunded';
+  s.refundedAt = new Date().toISOString();
+  saveSales(); saveProducts();
+  renderHistory(); renderPosProducts(); renderProducts();
+  toast('ยกเลิกบิลและคืนสต็อกแล้ว');
+}
+
+function viewSale(id){
+  const s = sales.find(x=>x.id===id); if(!s) return;
+  showReceipt(s, true);
+}
+
+function showReceipt(s, isView){
+  const W = 34;
+  const line = ch => ch.repeat(W);
+  const pad = (l,r)=>{ r=String(r); return l.slice(0,W-r.length-1).padEnd(W-r.length) + r; };
+  let txt = '';
+  txt += '        🛒 LocalPOS\n';
+  txt += '     ใบเสร็จรับเงิน\n';
+  txt += line('=') + '\n';
+  txt += 'เลขที่: ' + s.no + '\n';
+  txt += 'วันที่: ' + fmtDate(s.date) + '\n';
+  histFields().forEach(f=>{                 // ข้อมูลบิลตามฟิลด์ที่กรอกในหน้าขาย (แสดงเฉพาะที่มีค่า)
+    const v = saleFieldVal(s, f);
+    if(v) txt += f.label + ': ' + v + '\n';
+  });
+  txt += line('-') + '\n';
+  s.items.forEach(it=>{
+    txt += it.name + '\n';
+    txt += pad(`  ${it.qty} x ${baht(it.price)}`, baht(it.total)) + '\n';
+  });
+  txt += line('-') + '\n';
+  txt += pad('ยอดรวม (ก่อน VAT)', baht(s.subtotal)) + '\n';
+  txt += pad('VAT 7%' + (s.vatWaived ? ' (ยกเว้น)' : ''), baht(s.vat||0)) + '\n';
+  if(s.discount>0) txt += pad('ส่วนลด'+(s.discountName?` (${s.discountName})`:''), '-'+baht(s.discount)) + '\n';
+  const note = saleDiscountText(s);
+  if(note && note !== s.discountName) txt += 'Discount: ' + note + '\n';
+  txt += line('=') + '\n';
+  txt += pad('สุทธิ', baht(s.total)) + '\n';
+  txt += line('=') + '\n';
+  if(isVoid(s)) txt += '   ** บิลนี้ถูกยกเลิก/คืนเงิน **\n';
+  else txt += '   ขอบคุณที่ใช้บริการ 🙏\n';
+
+  $('modalTitle').textContent = isView ? 'รายละเอียดบิล '+s.no : 'ชำระเงินสำเร็จ ✓';
+  $('modalBody').innerHTML = `<div class="receipt">${esc(txt)}</div>`;
+  $('modalBg').classList.add('show');
+}
+
+function clearHistory(){
+  if(sales.length===0){ toast('ไม่มีประวัติ', true); return; }
+  if(!confirm('ล้างประวัติการขายทั้งหมด? การกระทำนี้ย้อนกลับไม่ได้')) return;
+  sales = []; saveSales(); DB.set(K.SEQ,0); renderHistory(); toast('ล้างประวัติแล้ว');
+}
+
+/* ============ EXPORT EXCEL — เลียนแบบต้นฉบับ "Hanuman Luge - Secondary Product Daily Report" ============ */
+function xesc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c])); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ⚙️ รายงาน Excel — คอลัมน์ยึดจาก "ระบบ" ทั้งหมด (เพิ่ม/ลบในระบบ → เปลี่ยนใน Excel ตาม)
+   ─────────────────────────────────────────────────────────────────────────
+   • Package : 1 คอลัมน์ต่อ 1 "สินค้า" ในหน้า 📦 สินค้า (เพิ่มสินค้า → เพิ่มคอลัมน์, ลบ → เอาออก)
+   • Program : 1 คอลัมน์ต่อ 1 รายการในหน้า 🎢 โปรแกรม
+   ═══════════════════════════════════════════════════════════════════════════ */
+const LUGE = {
+  reportTitle: 'Hanuman Luge - Secondary Product Daily Report',
+
+  // "Source of Customer" — ถ้าบิลไม่ได้เลือก จะใช้ค่านี้ (ตั้ง '' = เว้นว่าง)
+  defaultSource: 'Walk In - HL',
+
+  // สี/หน้าตา (ตรงต้นฉบับ; วนซ้ำถ้าคอลัมน์เกินจำนวนสี)
+  packageColors: ['009999','A9D18E','A6A6A6','B1A0C7','FFD966','ED7D31','5B9BD5'],
+  rideColors:    ['92D050','FFFF00','FF0000','00B0F0'],
+  headerColor:   '66CCFF',
+  paxColor:      'F4B183',
+  totalColor:    'B4C7E7'
+};
+
+function exportExcel(){
+  // เดือนที่เลือก (YYYY-MM) — ถ้าไม่เลือกใช้เดือนปัจจุบัน
+  const sel = ($('exMonth').value || '').split('-');
+  let y, m;
+  if(sel.length===2){ y = parseInt(sel[0]); m = parseInt(sel[1]) - 1; }
+  else { const now = new Date(); y = now.getFullYear(); m = now.getMonth(); }
+  const now = new Date(y, m, 1);
+  const monthSales = sales.filter(s=>{ const d=new Date(s.date); return d.getFullYear()===y && d.getMonth()===m; });
+  if(monthSales.length===0){ toast('เดือนที่เลือกยังไม่มีรายการขาย', true); return; }
+
+  // group by day
+  const byDay = {};
+  monthSales.forEach(s=>{ const d=new Date(s.date); const key=d.getDate(); (byDay[key]=byDay[key]||[]).push(s); });
+  const days = Object.keys(byDay).map(Number).sort((a,b)=>a-b);
+
+  const num    = n => Number(n||0);
+  // ราคาต่อรายการสำหรับรายงาน = ยอดที่คิดจริงรวม VAT (ยกเว้นบิล Non-VAT); บิลเก่าก่อนมีระบบ VAT คงค่าเดิม
+  const exItemPrice = (s, it) => {
+    const line = num(it.total!=null ? it.total : it.price*it.qty);
+    if(s.vat===undefined) return line;                              // บิลเก่า — ไม่แตะ
+    if(s.vatWaived)        return it.vat ? line/(1+VAT_RATE) : line; // ยกเว้น VAT
+    return it.vat ? line : line*(1+VAT_RATE);                       // ราคาไม่รวม VAT → บวก VAT
+  };
+  const timeOf = iso => { const d=new Date(iso); return d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); };
+  const dd     = n => String(n).padStart(2,'0');
+  const beShort= String((y+543)%100).padStart(2,'0');
+
+  /* ---------- คอลัมน์แบบไดนามิก: เดินตามลำดับฟิลด์ในหน้า ⚙️ (Package/Total/Discount เป็นฟิลด์ระบบ ย้ายได้) ---------- */
+  const pkgs = (products.length ? products : [{id:'_',name:'Package'}]);
+  const NP = pkgs.length;                                    // จำนวนสินค้า = จำนวนคอลัมน์ Package
+
+  // field แบบ multi (select+multi) → กิน 1 คอลัมน์ต่อ 1 ตัวเลือก (ติ๊ก √) ; package กิน 2 คอลัมน์ต่อสินค้า
+  const optsOf = f => { const o = fieldOptions(f); return o.length ? o : ['']; };
+  const span   = f => f.sys==='package' ? NP*2 : isMulti(f) ? optsOf(f).length : 1;
+  const exFields = fields.filter(f=>f.inExcel);              // ฟิลด์ที่ออกใน Excel เรียงตามลำดับจริง
+  const maxOpts = Math.max(1, ...exFields.filter(isMulti).map(f=>optsOf(f).length));
+  const canSum = f => !!f.sum && f.type==='number' && !isMulti(f) && !f.sys;   // ฟิลด์ที่ใส่ SUM ในแถวรวมได้
+
+  // ค่าที่ถูกเลือกของ field multi ต่อบิล (fallback role=program → s.ride ของบิลเก่า)
+  const selectedSet = (s, f) => {
+    let raw = (s.fields && s.fields[f.id] != null) ? s.fields[f.id] : '';
+    if(raw === '' && f.role==='program') raw = s.ride || '';
+    return new Set(String(raw).split(/[\n,]/).map(x=>x.trim()).filter(Boolean));
+  };
+
+  // ค่าของ field ต่อบิล (fallback: เวลา→timestamp, role→property เดิม/บิลเก่า)
+  const fieldVal = (s, f) => {
+    let val = (s.fields && s.fields[f.id] != null) ? s.fields[f.id] : '';
+    if(val === ''){
+      if(f.type==='time')              val = timeOf(s.date);
+      else if(f.role==='source')       val = LUGE.defaultSource;
+      else if(f.role==='customer')     val = s.customer || '';
+      else if(f.role==='photographer') val = s.photographer || '';
+      else if(f.role==='payment')      val = s.payment || '';
+      else if(f.role==='seller')       val = s.seller || '';
+      else if(f.role==='program')      val = s.ride || '';
+      else if(f.role==='pax')          val = (s.pax!=null ? s.pax : '');
+    }
+    return val;
+  };
+  // ค่าตัวเลขของ field (สำหรับ cell ตัวเลข/SUM) — pax ที่ว่าง = 1, อื่น ๆ ว่าง = 0
+  const fieldNum = (s, f) => {
+    const raw = fieldVal(s, f);
+    const nnum = parseFloat(raw);
+    return isNaN(nnum) ? (f.role==='pax' ? 1 : 0) : nnum;
+  };
+
+  /* ตำแหน่งคอลัมน์ — เดินตามลำดับ exFields ต่อจาก A=spacer, B=No. (header/row7/body/colW ใช้แผนที่เดียวกัน) */
+  const startCols = new Map();
+  let lastCol = 2;
+  exFields.forEach(f=>{ startCols.set(f, lastCol+1); lastCol += span(f); });
+  const pkgField = exFields.find(f=>f.sys==='package');
+  const pkColIdx = pkgField ? pkgs.map((p,i)=>startCols.get(pkgField) + i*2) : [];   // คอลัมน์เริ่มของแต่ละ Package
+  // สูตร Total ต่อแถว = ผลรวมทุกคอลัมน์ Price (อ้างเลขคอลัมน์ absolute — Total จะอยู่ตำแหน่งไหนก็ได้)
+  const totCells = pkColIdx.map(ci=>`RC${ci+1}`).join('+');
+
+  /* ---------- Styles (ฟอนต์ Browallia New + สีตรงต้นฉบับ) ---------- */
+  const BORD  = '<Borders><Border ss:Position="Left" ss:LineStyle="Continuous"/><Border ss:Position="Right" ss:LineStyle="Continuous"/><Border ss:Position="Top" ss:LineStyle="Continuous"/><Border ss:Position="Bottom" ss:LineStyle="Continuous"/></Borders>';
+  const BORDM = '<Borders><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="2"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="2"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="2"/><Border ss:Position="Bottom" ss:LineStyle="Continuous"/></Borders>';
+  const F  = (sz,bold) => `<Font ss:FontName="Browallia New" ss:Size="${sz}"${bold?' ss:Bold="1"':''}/>`;
+  const ALC= '<Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>';
+
+  let styles = '<Styles>';
+  styles += `<Style ss:ID="Default" ss:Name="Normal">${F(14)}<Alignment ss:Vertical="Center"/></Style>`;
+  styles += `<Style ss:ID="t">${F(72,1)}${ALC}${BORDM}</Style>`;                                                                     // title
+  styles += `<Style ss:ID="hM">${F(50,1)}<Interior ss:Color="#${LUGE.headerColor}" ss:Pattern="Solid"/>${ALC}${BORD}</Style>`;        // header หลัก (สี default)
+  pkgs.forEach((p,i)=>{
+    const c = LUGE.packageColors[i % LUGE.packageColors.length];
+    styles += `<Style ss:ID="pk${i}">${F(50,1)}<Interior ss:Color="#${c}" ss:Pattern="Solid"/>${ALC}${BORD}</Style>`;                 // หัว Package
+    styles += `<Style ss:ID="tp${i}">${F(48,1)}<Interior ss:Color="#${c}" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center"/>${BORD}</Style>`; // รวม Package
+  });
+  for(let i=0;i<maxOpts;i++){
+    const c = LUGE.rideColors[i % LUGE.rideColors.length];
+    styles += `<Style ss:ID="rd${i}">${F(50,1)}<Interior ss:Color="#${c}" ss:Pattern="Solid"/>${ALC}${BORD}</Style>`;                 // หัวตัวเลือก (multi)
+  }
+  // สไตล์เฉพาะ field ที่ตั้งสีหัวคอลัมน์เอง (hf*) และแถวรวม SUM ตามสี field (tf*)
+  const allFields = exFields;
+  const fHdrStyle = new Map(), fTotStyle = new Map();
+  allFields.forEach((f,gi)=>{
+    const col = normColor(f.color);
+    if(col){
+      styles += `<Style ss:ID="hf${gi}">${F(50,1)}<Interior ss:Color="#${col}" ss:Pattern="Solid"/>${ALC}${BORD}</Style>`;
+      fHdrStyle.set(f, `hf${gi}`);
+    } else fHdrStyle.set(f, 'hM');
+    if(canSum(f)){
+      const tc = col || LUGE.totalColor;
+      styles += `<Style ss:ID="tf${gi}">${F(48,1)}<Interior ss:Color="#${tc}" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><NumberFormat ss:Format="#,##0.##"/>${BORD}</Style>`;
+      fTotStyle.set(f, `tf${gi}`);
+    }
+  });
+  styles += `<Style ss:ID="d">${F(48)}${ALC}${BORD}</Style>`;                                                                          // ข้อมูล (ข้อความ)
+  styles += `<Style ss:ID="dN">${F(48)}<Alignment ss:Horizontal="Center" ss:Vertical="Center"/>${BORD}</Style>`;                      // ข้อมูล (ตัวเลข)
+  styles += `<Style ss:ID="tZ">${F(48,1)}<Interior ss:Color="#${LUGE.totalColor}" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><NumberFormat ss:Format="#,##0"/>${BORD}</Style>`; // รวม Total
+  styles += '</Styles>';
+
+  // ความกว้างคอลัมน์ — เรียงตามลำดับเดียวกับ header/body เป๊ะ (A, B แล้วเดินตาม exFields)
+  const colW = [18.89, 24.66];                              // A (spacer), B (No.)
+  exFields.forEach(f=>{
+    if(f.sys==='package'){ for(let i=0;i<NP;i++){ colW.push(14); colW.push(20); } }  // Pax + Price ต่อสินค้า
+    else if(isMulti(f)){ for(let i=0;i<optsOf(f).length;i++) colW.push(18); }
+    else colW.push(Number(f.width)>0 ? Number(f.width) : 22);                        // Total=37.33, Discount=78 มากับ f.width
+  });
+  const colDefs = colW.map(w=>`<Column ss:AutoFitWidth="0" ss:Width="${((w*7+5)*0.75).toFixed(1)}"/>`).join('');
+
+  let sheets = '';
+  days.forEach(day=>{
+    const rows = byDay[day].slice().sort((a,b)=>new Date(a.date)-new Date(b.date));
+    const n = rows.length;
+    const sheetName = `${dd(day)}-${dd(m+1)}-${beShort}`;
+    const titleText = '     ' + LUGE.reportTitle + ' ' + `${dd(day)}/${dd(m+1)}/${y}`;
+
+    /* --- แถวหัวตาราง (row 1-8) --- */
+    const row1 = '<Row ss:Height="15"/>';
+    const row2 = `<Row ss:Height="174" ss:AutoFitHeight="0"><Cell ss:Index="2" ss:MergeAcross="${lastCol-2}" ss:StyleID="t"><Data ss:Type="String">${xesc(titleText)}</Data></Cell></Row>`;
+    // หัวคอลัมน์ของ field: package = กลุ่ม (MergeAcross NP*2-1) ; multi = กลุ่ม (MergeDown 3) + option names ใน row7 ; อื่น ๆ = MergeDown 5
+    const fieldHeader = f => {
+      const st = startCols.get(f), hs = fHdrStyle.get(f) || 'hM';
+      if(f.sys==='package')
+        return `<Cell ss:Index="${st}" ss:MergeAcross="${NP*2-1}" ss:StyleID="${hs}"><Data ss:Type="String">${xesc(f.label)}</Data></Cell>`;
+      return isMulti(f)
+        ? `<Cell ss:Index="${st}" ss:MergeAcross="${span(f)-1}" ss:MergeDown="3" ss:StyleID="${hs}"><Data ss:Type="String">${xesc(f.label)}</Data></Cell>`
+        : `<Cell ss:Index="${st}" ss:MergeDown="5" ss:StyleID="${hs}"><Data ss:Type="String">${xesc(f.label)}</Data></Cell>`;
+    };
+    let row3 = `<Row ss:Height="96.75" ss:AutoFitHeight="0">`
+      + `<Cell ss:Index="2" ss:MergeDown="5" ss:StyleID="hM"><Data ss:Type="String">.</Data></Cell>`;
+    exFields.forEach(f=>{ row3 += fieldHeader(f); });
+    row3 += `</Row>`;
+    let row4 = `<Row ss:Height="69.75" ss:AutoFitHeight="0">`;
+    if(pkgField) pkgs.forEach((p,i)=>{ row4 += `<Cell ss:Index="${pkColIdx[i]}" ss:MergeAcross="1" ss:MergeDown="1" ss:StyleID="pk${i}"><Data ss:Type="String">${xesc(p.name)}</Data></Cell>`; });
+    row4 += `</Row>`;
+    const row5 = '<Row ss:Height="77.25" ss:AutoFitHeight="0"/>';
+    let row6 = `<Row ss:Height="36.75" ss:AutoFitHeight="0">`;
+    if(pkgField) pkgs.forEach((p,i)=>{
+      row6 += `<Cell ss:Index="${pkColIdx[i]}" ss:MergeDown="2" ss:StyleID="pk${i}"><Data ss:Type="String">Pax</Data></Cell>`;
+      row6 += `<Cell ss:Index="${pkColIdx[i]+1}" ss:MergeDown="2" ss:StyleID="pk${i}"><Data ss:Type="String">Price</Data></Cell>`;
+    });
+    row6 += `</Row>`;
+    // row7 = ชื่อตัวเลือกใต้กลุ่ม field multi (exFields เรียงตามคอลัมน์อยู่แล้ว)
+    let row7 = `<Row ss:Height="54.75" ss:AutoFitHeight="0">`;
+    exFields.filter(isMulti).forEach(f=>{
+      const st = startCols.get(f);
+      optsOf(f).forEach((pn,i)=>{ row7 += `<Cell ss:Index="${st+i}" ss:MergeDown="1" ss:StyleID="rd${i}"><Data ss:Type="String">${xesc(pn)}</Data></Cell>`; });
+    });
+    row7 += `</Row>`;
+    const row8 = '<Row ss:Height="130.5" ss:AutoFitHeight="0"/>';
+
+    /* --- แถวข้อมูล (row 9 เป็นต้นไป) + สะสมยอดรวมไว้ใส่แถว Total --- */
+    const r2 = x => Math.round(x*100)/100;                 // ปัดทศนิยม 2 ตำแหน่ง กันเลขทศนิยมเพี้ยน
+    let body = '';
+    let grand = 0;                                         // รวมยอดสุทธิทั้งวัน
+    const fieldSum = {};                                   // รวมค่าของ field ที่เปิด SUM (keyed by field id)
+    const paxSum = new Array(NP).fill(0), priceSum = new Array(NP).fill(0);   // รวมต่อคอลัมน์ Package
+    rows.forEach((s,idx)=>{
+      const v = isVoid(s);
+      const pax = new Array(NP).fill(0), price = new Array(NP).fill(0);
+      if(!v){
+        (s.items||[]).forEach(it=>{
+          // จับคู่สินค้ากับคอลัมน์ Package ด้วย id ก่อน (fallback ชื่อ); สินค้าที่ถูกลบออกจากระบบจะไม่แสดง
+          let pi = pkgs.findIndex(p=>p.id===it.productId);
+          if(pi<0) pi = pkgs.findIndex(p=>p.name===it.name);
+          if(pi<0) return;
+          pax[pi]   += num(it.qty);
+          price[pi] += exItemPrice(s, it);
+        });
+        // เฉลี่ยส่วนลดระดับบิลลงราคาแต่ละ Package ตามสัดส่วน ให้ผลรวม = ยอดสุทธิจริง (s.total) เป๊ะ
+        const gross = price.reduce((a,b)=>a+b, 0);
+        if(gross>0){
+          const scale = num(s.total)/gross;
+          let lastIdx = -1;
+          for(let i=0;i<NP;i++){ price[i] = r2(price[i]*scale); if(price[i]) lastIdx = i; }
+          const diff = r2(num(s.total) - price.reduce((a,b)=>a+b, 0));   // แก้เศษปัดที่คอลัมน์สุดท้าย
+          if(diff && lastIdx>=0) price[lastIdx] = r2(price[lastIdx] + diff);
+        }
+      }
+      // คำนวณ Total ของแถวนี้ + สะสมยอดรวมของทั้งวัน
+      const rowTotal = r2(price.reduce((a,b)=>a+b, 0));
+      grand += rowTotal;
+      for(let i=0;i<NP;i++){ paxSum[i]+=pax[i]; priceSum[i]+=price[i]; }
+      allFields.forEach(f=>{ if(canSum(f)) fieldSum[f.id] = (fieldSum[f.id]||0) + fieldNum(s, f); });  // สะสม SUM ต่อ field
+
+      const numC = (st,val)=> val ? `<Cell ss:StyleID="${st}"><Data ss:Type="Number">${val}</Data></Cell>` : `<Cell ss:StyleID="${st}"></Cell>`;
+      const strC = (st,val)=> `<Cell ss:StyleID="${st}"><Data ss:Type="String">${xesc(val)}</Data></Cell>`;
+      const chkC = on=> on ? `<Cell ss:StyleID="d"><Data ss:Type="String">√</Data></Cell>` : `<Cell ss:StyleID="d"></Cell>`;
+      // Discount (sys remark): ค่าที่กรอกในหน้าขาย → ถ้าว่างใช้ชื่อส่วนลดของบิล ; บิลยกเลิกแสดงสถานะแทน
+      const remarkOf = f => {
+        if(v) return 'ยกเลิก/คืนเงิน';
+        const raw = (s.fields && s.fields[f.id] != null) ? String(s.fields[f.id]).trim() : '';
+        return raw || s.discountName || '';
+      };
+      // cell ของ field: package = Pax|Price ต่อสินค้า ; total = สูตรรวม ; multi = ติ๊กต่อตัวเลือก ; number = ตัวเลข ; อื่น ๆ = ข้อความ
+      const fieldBody = f => {
+        if(f.sys==='package'){ let out=''; for(let i=0;i<NP;i++){ out += numC('dN',r2(pax[i])) + numC('dN',r2(price[i])); } return out; }
+        if(f.sys==='total'){ return `<Cell ss:StyleID="dN"${totCells?` ss:Formula="=${totCells}"`:''}><Data ss:Type="Number">${rowTotal}</Data></Cell>`; }
+        if(f.sys==='remark'){ return strC('d', remarkOf(f)); }
+        if(isMulti(f)){ const sel = selectedSet(s, f); return optsOf(f).map(o=>chkC(sel.has(o))).join(''); }
+        if(f.type==='number'){ return numC('dN', r2(fieldNum(s, f))); }
+        return strC('d', fieldVal(s, f));
+      };
+
+      let c = '';
+      c += `<Cell ss:Index="2" ss:StyleID="dN"><Data ss:Type="Number">${idx+1}</Data></Cell>`;  // B  No.
+      exFields.forEach(f=>{ c += fieldBody(f); });          // เดินตามลำดับเดียวกับ header/colW
+      body += `<Row ss:Height="172.5" ss:AutoFitHeight="0">${c}</Row>`;
+    });
+
+    /* --- แถวรวมยอด (=SUM ต่อคอลัมน์ พร้อมค่าที่คำนวณจริง) — sparse: มีเซลล์เฉพาะคอลัมน์ที่รวม --- */
+    const sumF = `=SUM(R[-${n}]C:R[-1]C)`;
+    const fieldTotCell = f => `<Cell ss:Index="${startCols.get(f)}" ss:StyleID="${fTotStyle.get(f)}" ss:Formula="${sumF}"><Data ss:Type="Number">${r2(fieldSum[f.id]||0)}</Data></Cell>`;
+    let tot = '';
+    exFields.forEach(f=>{
+      if(f.sys==='package'){
+        for(let i=0;i<NP;i++){
+          tot += `<Cell ss:Index="${pkColIdx[i]}" ss:StyleID="tp${i}" ss:Formula="${sumF}"><Data ss:Type="Number">${r2(paxSum[i])}</Data></Cell>`;    // Pax
+          tot += `<Cell ss:StyleID="tp${i}" ss:Formula="${sumF}"><Data ss:Type="Number">${r2(priceSum[i])}</Data></Cell>`;                             // Price
+        }
+      } else if(f.sys==='total'){
+        tot += `<Cell ss:Index="${startCols.get(f)}" ss:StyleID="tZ" ss:Formula="${sumF}"><Data ss:Type="Number">${r2(grand)}</Data></Cell>`;          // รวมยอดสุทธิ
+      } else if(canSum(f)){
+        tot += fieldTotCell(f);
+      }
+    });
+    const totalRow = `<Row ss:Height="152.25" ss:AutoFitHeight="0">${tot}</Row>`;
+
+    sheets += `<Worksheet ss:Name="${xesc(sheetName)}">`
+      + `<Table>${colDefs}${row1}${row2}${row3}${row4}${row5}${row6}${row7}${row8}${body}${totalRow}</Table>`
+      + `<WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><FreezePanes/><SplitHorizontal>8</SplitHorizontal><TopRowBottomPane>8</TopRowBottomPane><ProtectObjects>False</ProtectObjects></WorksheetOptions>`
+      + `</Worksheet>`;
+  });
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ ${styles}
+ ${sheets}
+</Workbook>`;
+
+  const monthName = now.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+  const fname = `Luge - Photo Booth Daily Report ${monthName}.xls`;
+  const blob = new Blob(['﻿'+xml], {type:'application/vnd.ms-excel;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fname; document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  toast(`ส่งออก ${monthSales.length} รายการ (${days.length} วัน) เรียบร้อย`);
+}
+
+/* ============ BACKUP / RESTORE ฐานข้อมูล (localStorage) ============ */
+function backupDB(){
+  const data = {
+    _app: 'LocalPOS',
+    _version: 1,
+    exportedAt: new Date().toISOString(),
+    products, discounts, sellers, payments, sales,
+    sources: M.source, photographers: M.photog, programs: M.program,
+    fields,
+    seq: DB.get(K.SEQ, 0)
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const stamp = new Date().toISOString().slice(0,10);
+  const a = document.createElement('a');
+  a.href = url; a.download = `LocalPOS-backup-${stamp}.json`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  toast('สำรองข้อมูลเรียบร้อย 💾');
+}
+
+function importDB(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    try{
+      const data = JSON.parse(e.target.result);
+      if(data._app !== 'LocalPOS' || !Array.isArray(data.products)){
+        throw new Error('ไฟล์ไม่ใช่ข้อมูลสำรองของ LocalPOS');
+      }
+      if(!confirm('นำเข้าข้อมูลจากไฟล์นี้? ข้อมูลปัจจุบันทั้งหมดจะถูกแทนที่')){ input.value=''; return; }
+      products  = data.products  || [];
+      discounts = data.discounts || [];
+      sellers   = data.sellers   || [];
+      payments  = (data.payments && data.payments.length) ? data.payments : payments;
+      sales     = data.sales     || [];
+      if(Array.isArray(data.sources))        M.source  = data.sources;
+      if(Array.isArray(data.photographers))  M.photog  = data.photographers;
+      if(Array.isArray(data.programs))       M.program = data.programs;
+      if(Array.isArray(data.fields))         fields    = data.fields;
+      ensureSysFields();                                    // ไฟล์สำรองรุ่นเก่าไม่มีฟิลด์ระบบ → เติมให้
+      saveProducts(); saveDiscounts(); saveSellers(); savePayments(); saveSales(); saveFields();
+      DB.set(K.SRC, M.source); DB.set(K.PHO, M.photog); DB.set(K.PRG, M.program);
+      DB.set(K.SEQ, data.seq || 0);
+      // refresh ทุกหน้า
+      cart=[]; selectedDiscountIds=[];
+      renderPosProducts(); renderProducts(); renderDiscounts();
+      renderFields(); renderCoCustomFields();
+      renderCart(); renderDiscountChips(); renderHistory();
+      toast('นำเข้าข้อมูลเรียบร้อย ✓');
+    }catch(err){
+      toast('นำเข้าไม่สำเร็จ: ' + err.message, true);
+    }
+    input.value = '';
+  };
+  reader.readAsText(file);
+}
+
+/* ============ helpers / modal ============ */
+function closeModal(){ $('modalBg').classList.remove('show'); }
+$('modalBg').onclick = e=>{ if(e.target===$('modalBg')) closeModal(); };
+
+function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmtDate(iso){
+  const d = new Date(iso);
+  return d.toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit',year:'numeric'}) + ' ' +
+         d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+}
+
+/* live search bindings */
+$('posSearch').oninput  = renderPosProducts;
+$('prodSearch').oninput = renderProducts;
+
+/* ============ INIT ============ */
+ensureSysFields();
+renderPosProducts();
+renderProducts();
+renderDiscounts();
+renderFields();
+renderCoCustomFields();
+renderCart();
+renderDiscountChips();
+</script>
+</body>
+</html>
