@@ -202,6 +202,127 @@ function _chunk_(s, size) {
   return out;
 }
 
+/* ==================== CONCURRENCY-SAFE OPS ====================
+ * ปัญหาเดิม: client โหลดข้อมูลทั้งก้อนตอน login แล้วเขียนทับทั้ง key เวลาบันทึก
+ * → เมื่อหลายเครื่องขายพร้อมกัน เครื่องที่เซฟทีหลังจะ "ทับ" บิลของเครื่องอื่น (บิลหาย),
+ *   เลขบิลซ้ำ, และสต็อกเพี้ยน
+ * วิธีแก้: ทุกการเปลี่ยนแปลงที่สำคัญให้ทำที่ server ภายใน LockService เดียว โดย
+ *   อ่านค่า "ล่าสุด" จากชีตก่อนเสมอ แล้วค่อย merge/append/หัก-delta (ไม่ใช้ snapshot เก่าจาก client)
+ */
+
+// อ่านค่าปัจจุบันของ key เดียว (ประกอบ chunk แล้ว JSON.parse) — คืน null ถ้าไม่มี/พังพาร์ส
+function _readKey_(sheet, key) {
+  var last = sheet.getLastRow();
+  if (last < 2) return null;
+  var rows = sheet.getRange(2, 1, last - 1, 3).getValues();
+  var chunks = [];
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i][0] === key) chunks.push({ idx: Number(rows[i][1]) || 0, value: String(rows[i][2] == null ? '' : rows[i][2]) });
+  }
+  if (!chunks.length) return null;
+  chunks.sort(function (a, b) { return a.idx - b.idx; });
+  var joined = chunks.map(function (c) { return c.value; }).join('');
+  if (joined === '') return null;
+  try { return JSON.parse(joined); } catch (e) { return null; }
+}
+
+// โหลดเฉพาะบาง key (ใช้รีเฟรชระหว่างใช้งานให้เห็นข้อมูลของเครื่องอื่น โดยไม่ต้องโหลดใหม่ทั้งหมด)
+function loadKeys(token, keys) {
+  _requireSession_(token);
+  var sheet = _sheet_(STORE_SHEET);
+  var out = {};
+  if (!keys || !keys.length) return { ok: true, data: out };
+  for (var i = 0; i < keys.length; i++) out[keys[i]] = _readKey_(sheet, keys[i]);
+  return { ok: true, data: out };
+}
+
+var PROD_KEY  = 'pos_products';   // ต้องตรงกับ K.PROD ฝั่ง client
+var SALES_KEY = 'pos_sales';      // ต้องตรงกับ K.SALES ฝั่ง client
+
+function _pad5_(n) { n = String(n); while (n.length < 5) n = '0' + n; return n; }
+
+// upsert เรคคอร์ดตาม id: มีอยู่แล้ว → แทนที่, ยังไม่มี → ใส่หน้าสุด (ล่าสุดอยู่บน)
+function _upsert_(sheet, key, records) {
+  var arr = _readKey_(sheet, key);
+  if (!(arr instanceof Array)) arr = [];
+  var pos = {};
+  for (var i = 0; i < arr.length; i++) if (arr[i] && arr[i].id != null) pos[arr[i].id] = i;
+  for (var j = 0; j < records.length; j++) {
+    var rec = records[j];
+    if (rec && rec.id != null && pos[rec.id] !== undefined) {
+      arr[pos[rec.id]] = rec;
+    } else {
+      arr.unshift(rec);
+      pos = {};
+      for (var k = 0; k < arr.length; k++) if (arr[k] && arr[k].id != null) pos[arr[k].id] = k;
+    }
+  }
+  _writeKey_(sheet, key, JSON.stringify(arr));
+  return arr.length;
+}
+
+// ปรับสต็อกแบบ delta (หัก/คืน) บนค่าล่าสุด — ข้ามสินค้าสต็อกไม่จำกัด
+function _applyStock_(sheet, deltas) {
+  if (!deltas) return;
+  var products = _readKey_(sheet, PROD_KEY);
+  if (!(products instanceof Array)) return;
+  var changed = false;
+  for (var i = 0; i < products.length; i++) {
+    var p = products[i];
+    if (p && p.id != null && deltas[p.id] !== undefined && !p.unlimited) {
+      p.stock = (Number(p.stock) || 0) + Number(deltas[p.id]);
+      changed = true;
+    }
+  }
+  if (changed) _writeKey_(sheet, PROD_KEY, JSON.stringify(products));
+}
+
+// บันทึกการขาย 1 บิลแบบ atomic: จองเลขบิล + เพิ่มบิล + ตัดสต็อก ในล็อกเดียว
+// server เป็นผู้ออกเลขบิล (กันเลขซ้ำ) แล้วส่งกลับให้ client
+function commitSale(token, sale, stockDeltas, seqKey) {
+  _requireSession_(token);
+  if (!sale) return { ok: false, error: 'ไม่มีข้อมูลบิล' };
+  seqKey = seqKey || 'pos_seq';
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var sheet = _sheet_(STORE_SHEET);
+    var seq = (Number(_readKey_(sheet, seqKey)) || 0) + 1;   // เลขบิลจากค่าล่าสุด
+    sale.no = 'INV-' + _pad5_(seq);
+    _upsert_(sheet, SALES_KEY, [sale]);                      // เพิ่มบิล (ไม่ทับของเครื่องอื่น)
+    _applyStock_(sheet, stockDeltas);                        // ตัดสต็อกแบบ delta
+    _writeKey_(sheet, seqKey, JSON.stringify(seq));          // เดินเลขรันนิ่ง
+    SpreadsheetApp.flush();
+    return { ok: true, no: sale.no, seq: seq };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ยกเลิก/คืนเงินบิลแบบ atomic + idempotent: ถ้าถูกยกเลิกไปแล้วจะไม่คืนสต็อกซ้ำ
+function commitVoid(token, saleId, stockDeltas, refundedAt) {
+  _requireSession_(token);
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var sheet = _sheet_(STORE_SHEET);
+    var arr = _readKey_(sheet, SALES_KEY);
+    if (!(arr instanceof Array)) return { ok: false, error: 'ไม่พบข้อมูลการขาย' };
+    var idx = -1;
+    for (var i = 0; i < arr.length; i++) { if (arr[i] && arr[i].id === saleId) { idx = i; break; } }
+    if (idx < 0) return { ok: false, error: 'ไม่พบบิลนี้ (อาจถูกลบไปแล้ว)' };
+    if (arr[idx].status === 'refunded') return { ok: true, already: true };  // ยกเลิกแล้ว → ไม่คืนสต็อกซ้ำ
+    arr[idx].status = 'refunded';
+    arr[idx].refundedAt = refundedAt || '';
+    _writeKey_(sheet, SALES_KEY, JSON.stringify(arr));
+    _applyStock_(sheet, stockDeltas);                        // คืนสต็อกแบบ delta
+    SpreadsheetApp.flush();
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 /* ==================== HELPERS ==================== */
 function _sheet_(name) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();

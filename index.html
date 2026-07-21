@@ -552,7 +552,40 @@ const Store = {
     }
     return Promise.resolve(out);
   },
-  /* --- บันทึก (debounce รวม batch เพื่อลดการเขียน) --- */
+  /* --- รีเฟรชเฉพาะบาง key จาก server (ให้เห็นข้อมูลของเครื่องอื่นระหว่างใช้งาน) --- */
+  refresh(keys){
+    if(!IS_GAS) return Promise.resolve({});
+    return new Promise((res, rej)=> google.script.run
+      .withSuccessHandler(r=> r && r.ok ? res(r.data||{}) : rej(new Error((r&&r.error)||'load failed')))
+      .withFailureHandler(e=>rej(new Error(_gerr(e))))
+      .loadKeys(AUTH.token, keys));
+  },
+  /* --- บันทึกการขายแบบ atomic (จองเลขบิล + เพิ่มบิล + ตัดสต็อก ในครั้งเดียว) ---
+     กันบิลหาย/เลขซ้ำ/สต็อกเพี้ยน เมื่อหลายเครื่องขายพร้อมกัน; server เป็นผู้ออกเลขบิล */
+  commitSale(sale, stockDeltas, seqKey){
+    if(IS_GAS){
+      return new Promise((res, rej)=> google.script.run
+        .withSuccessHandler(r=> r && r.ok ? res(r) : rej(new Error((r&&r.error)||'save failed')))
+        .withFailureHandler(e=>rej(new Error(_gerr(e))))
+        .commitSale(AUTH.token, sale, stockDeltas||{}, seqKey));
+    }
+    // ออฟไลน์ (ผู้ใช้เดียว): จำลอง atomic ในเครื่อง — ออกเลขบิล + เดินเลขรันนิ่ง
+    const seq = (Number(_cache[seqKey]||0)) + 1;
+    sale.no = 'INV-' + String(seq).padStart(5,'0');
+    _cache[seqKey] = seq; try{ localStorage.setItem(seqKey, JSON.stringify(seq)); }catch(e){}
+    return Promise.resolve({ ok:true, no: sale.no, seq });
+  },
+  /* --- ยกเลิก/คืนเงินบิลแบบ atomic + idempotent --- */
+  commitVoid(saleId, stockDeltas, refundedAt){
+    if(IS_GAS){
+      return new Promise((res, rej)=> google.script.run
+        .withSuccessHandler(r=> r && r.ok ? res(r) : rej(new Error((r&&r.error)||'void failed')))
+        .withFailureHandler(e=>rej(new Error(_gerr(e))))
+        .commitVoid(AUTH.token, saleId, stockDeltas||{}, refundedAt));
+    }
+    return Promise.resolve({ ok:true });   // ออฟไลน์: handler จะ persist ทั้งก้อนเอง
+  },
+  /* --- บันทึก (debounce รวม batch เพื่อลดการเขียน) — ใช้กับข้อมูลตั้งค่า (สินค้า/ส่วนลด/ฟิลด์ ฯลฯ) --- */
   _pending:{}, _timer:null, _inflight:false,
   persist(key, val){
     if(!IS_GAS){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){} return; }
@@ -647,13 +680,14 @@ function ensureSysFields(){
 
 /* ============ NAVIGATION ============ */
 document.querySelectorAll('nav button').forEach(b=>{
-  b.onclick = ()=>{
+  b.onclick = async ()=>{
     document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
     document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
     b.classList.add('active');
     $('view-'+b.dataset.view).classList.add('active');
-    if(b.dataset.view==='history') renderHistory();
-    if(b.dataset.view==='pos'){ renderPosProducts(); renderCoCustomFields(); }
+    // ดึงข้อมูลล่าสุดจากเครื่องอื่นก่อนเรนเดอร์ (ประวัติ = บิล+สต็อก, หน้าขาย = สต็อก)
+    if(b.dataset.view==='history'){ await refreshFromServer([K.SALES, K.PROD]); renderHistory(); }
+    if(b.dataset.view==='pos'){ await refreshFromServer([K.PROD]); renderPosProducts(); renderCoCustomFields(); }
     if(b.dataset.view==='fields') renderFields();
   };
 });
@@ -1166,26 +1200,27 @@ function updateSummary(){
   $('lineVat').style.display = cart.length ? '' : 'none';
 }
 
-function checkout(){
+async function checkout(){
   if(cart.length===0){ toast('ตะกร้าว่าง', true); return; }
+  if(_checkoutBusy) return;                         // กันกดซ้ำระหว่างรอ server
   const {subtotal, discount, total, discs, vat, hasNovat, customPct, customBaht} = calcTotals();
   // ชื่อส่วนลดของบิล = ส่วนลดสำเร็จรูปที่เลือก + ส่วนลดกำหนดเอง (ถ้ามี)
   const discNames = discs.map(d=>d.name);
   if(customPct>0)  discNames.push(customPct+'%');
   if(customBaht>0) discNames.push(baht(customBaht));
 
-  // deduct stock (สินค้าสต็อกไม่จำกัด ไม่ต้องตัด)
-  cart.forEach(it=>{ const p=products.find(x=>x.id===it.id); if(p && !p.unlimited) p.stock -= it.qty; });
+  // delta สต็อก (ค่าติดลบ = หัก) — สินค้าสต็อกไม่จำกัด ไม่ต้องตัด; ยังไม่แตะ products จนกว่าจะเซฟผ่าน
+  const stockDeltas = {};
+  cart.forEach(it=>{ const p=products.find(x=>x.id===it.id); if(p && !p.unlimited) stockDeltas[p.id] = (stockDeltas[p.id]||0) - it.qty; });
 
   // เก็บค่าฟิลด์กำหนดเอง + ดึงค่าตาม role ไปใส่ property เดิม (ให้ประวัติ/ใบเสร็จ/Excel เดิมทำงานได้)
   const fieldVals = {};
   fields.filter(f=>f.inPos).forEach(f=>{ fieldVals[f.id] = getCoFieldValue(f); });
   const byRole = r => { const f = fields.find(x=>x.role===r); return f ? (fieldVals[f.id]||'') : ''; };
 
-  const seq = (DB.get(K.SEQ,0)) + 1; DB.set(K.SEQ, seq);
   const sale = {
     id: uid(),
-    no: 'INV-' + String(seq).padStart(5,'0'),
+    no: '',                                         // server เป็นผู้ออกเลขบิล (กันเลขซ้ำ)
     date: new Date().toISOString(),
     items: cart.map(it=>({productId:it.id, name:it.name, price:it.price, qty:it.qty, total:it.price*it.qty, vat:!!it.vat})),
     subtotal, discount, total, vat, vatWaived: hasNovat,
@@ -1201,13 +1236,31 @@ function checkout(){
     ride: byRole('program'),
     status: 'completed'
   };
+
+  // บันทึกแบบ atomic ที่ server ก่อน (จองเลขบิล + เพิ่มบิล + ตัดสต็อก) — ถ้าไม่ผ่าน ไม่แตะ state
+  _checkoutBusy = true; setSync('saving');
+  let r;
+  try{ r = await Store.commitSale(sale, stockDeltas, K.SEQ); }
+  catch(err){
+    _checkoutBusy = false; setSync('error');
+    if(String(_gerr(err)).indexOf('SESSION_EXPIRED')>=0){ toast('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่', true); showLogin(); return; }
+    toast('บันทึกการขายไม่สำเร็จ กรุณาลองใหม่: ' + _gerr(err), true);
+    return;
+  }
+  _checkoutBusy = false; setSync('saved');
+  sale.no = r.no || sale.no;
+
+  // อัปเดต state ในเครื่องหลังบันทึกสำเร็จเท่านั้น
+  cart.forEach(it=>{ const p=products.find(x=>x.id===it.id); if(p && !p.unlimited) p.stock -= it.qty; });
   sales.unshift(sale);
-  saveSales(); saveProducts();
+  _cache[K.SEQ] = r.seq;
+  if(!IS_GAS){ saveSales(); saveProducts(); }        // ออฟไลน์: persist ทั้งก้อนลง localStorage
 
   showReceipt(sale);
   clearCart(); renderPosProducts();
   toast('บันทึกการขายเรียบร้อย ✓');
 }
+let _checkoutBusy = false;
 
 /* ============ HISTORY ============ */
 const isVoid = s => s.status === 'refunded';
@@ -1270,17 +1323,43 @@ function renderHistory(){
     </tr>`).join('');
 }
 
-function voidSale(id){
+async function voidSale(id){
   const s = sales.find(x=>x.id===id); if(!s || isVoid(s)) return;
   if(!confirm(`ยกเลิก/คืนเงินบิล ${s.no}?\nระบบจะคืนสต็อกสินค้ากลับเข้าคลังให้อัตโนมัติ`)) return;
-  // restore stock (match by id, fall back to name) — สินค้าสต็อกไม่จำกัด ไม่ต้องคืน
+  // delta คืนสต็อก (ค่าบวก) — match ตาม id, fallback ชื่อ; สินค้าไม่จำกัด ไม่ต้องคืน
+  const stockDeltas = {};
+  s.items.forEach(it=>{
+    const p = products.find(x=>x.id===it.productId) || products.find(x=>x.name===it.name);
+    if(p && !p.unlimited) stockDeltas[p.id] = (stockDeltas[p.id]||0) + it.qty;
+  });
+  const refundedAt = new Date().toISOString();
+
+  setSync('saving');
+  let r;
+  try{ r = await Store.commitVoid(id, stockDeltas, refundedAt); }
+  catch(err){
+    setSync('error');
+    if(String(_gerr(err)).indexOf('SESSION_EXPIRED')>=0){ toast('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่', true); showLogin(); return; }
+    toast('ยกเลิกบิลไม่สำเร็จ กรุณาลองใหม่: ' + _gerr(err), true);
+    return;
+  }
+  setSync('saved');
+
+  if(r.already){   // เครื่องอื่นยกเลิกบิลนี้ไปแล้ว → ดึงค่าจริงจาก server มา ไม่คืนสต็อกซ้ำ
+    toast('บิลนี้ถูกยกเลิกไปแล้วจากเครื่องอื่น', true);
+    await refreshFromServer([K.SALES, K.PROD]);
+    renderHistory(); renderPosProducts(); renderProducts();
+    return;
+  }
+
+  // อัปเดต state ในเครื่องหลังยกเลิกสำเร็จ
   s.items.forEach(it=>{
     const p = products.find(x=>x.id===it.productId) || products.find(x=>x.name===it.name);
     if(p && !p.unlimited) p.stock += it.qty;
   });
   s.status = 'refunded';
-  s.refundedAt = new Date().toISOString();
-  saveSales(); saveProducts();
+  s.refundedAt = refundedAt;
+  if(!IS_GAS){ saveSales(); saveProducts(); }
   renderHistory(); renderPosProducts(); renderProducts();
   toast('ยกเลิกบิลและคืนสต็อกแล้ว');
 }
@@ -1785,6 +1864,23 @@ async function changeMyPassword(){
   if(r && r.ok) toast('เปลี่ยนรหัสผ่านแล้ว ✓'); else toast((r&&r.error)||'เปลี่ยนรหัสผ่านไม่สำเร็จ', true);
 }
 
+/* ---- เรียงบิลใหม่สุดอยู่บน (ข้อมูลจากหลายเครื่องอาจสลับลำดับ) ---- */
+function sortSales(){ sales.sort((a,b)=> (new Date(b.date)) - (new Date(a.date))); }
+
+/* ---- รีเฟรชเฉพาะบาง key จาก server เข้าสู่ cache + ตัวแปรในหน่วยความจำ ----
+   ใช้ตอนเปิดหน้าประวัติ/หน้าขาย เพื่อให้เห็นบิล/สต็อกล่าสุดจากเครื่องอื่น */
+async function refreshFromServer(keys){
+  if(!IS_GAS) return;
+  let data;
+  try{ data = await Store.refresh(keys); }catch(e){ return; }   // รีเฟรชไม่ได้ก็ใช้ของเดิมต่อ (เงียบ)
+  const pend = Store._pending || {};                            // อย่าทับ key ที่มีการแก้ไขในเครื่องยังไม่ได้เซฟ
+  if(Array.isArray(data[K.SALES]) && !(K.SALES in pend)) { sales     = _cache[K.SALES] = data[K.SALES];   sortSales(); }
+  if(Array.isArray(data[K.PROD])  && !(K.PROD  in pend)) { products  = _cache[K.PROD]  = data[K.PROD]; }
+  if(Array.isArray(data[K.PAYS])  && !(K.PAYS  in pend)) { payments  = _cache[K.PAYS]  = data[K.PAYS]; }
+  if(Array.isArray(data[K.DISC])  && !(K.DISC  in pend)) { discounts = _cache[K.DISC]  = data[K.DISC]; }
+  if(data[K.SEQ]!=null && !isNaN(Number(data[K.SEQ])) && !(K.SEQ in pend)) _cache[K.SEQ] = Number(data[K.SEQ]);
+}
+
 /* ---- โหลดข้อมูลจาก backend เข้าสู่ตัวแปรในหน่วยความจำ แล้วเรนเดอร์ ---- */
 async function startApp(){
   $('loginHint').textContent = 'กำลังโหลดข้อมูล…';
@@ -1805,6 +1901,7 @@ async function startApp(){
   M.photog  = DB.get(K.PHO, []);
   M.program = DB.get(K.PRG, []);
   fields    = DB.get(K.FIELDS, []);
+  sortSales();
 
   // แสดง user badge
   $('whoName').textContent = AUTH.user.displayName || AUTH.user.username;
