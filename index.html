@@ -359,7 +359,10 @@
         <span>📜 ประวัติการขาย</span>
         <span style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <button class="btn btn-green btn-sm" onclick="exportExcel()">⬇️ Export Excel (ตามที่กรอง)</button>
+          <button class="btn btn-ghost btn-sm" onclick="exportSalesData()">🗄️ Export ข้อมูล (JSON)</button>
+          <button class="btn btn-ghost btn-sm" onclick="$('importSalesFile').click()">📥 Import ข้อมูล</button>
           <button class="btn btn-red btn-sm" onclick="clearHistory()">🗑 ล้างประวัติ</button>
+          <input type="file" id="importSalesFile" accept=".json,application/json" style="display:none" onchange="importSalesData(this)">
         </span>
       </h2>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
@@ -1665,6 +1668,60 @@ function exportExcel(){
   a.href = url; a.download = fname; document.body.appendChild(a); a.click();
   document.body.removeChild(a); URL.revokeObjectURL(url);
   toast(`ส่งออก ${picked.length} รายการ (${days.length} วัน) เรียบร้อย`);
+}
+
+/* ============ EXPORT / IMPORT ประวัติการขาย (JSON) — ตามหมวดที่เลือก ============ */
+const seqNo = no => { const m = String(no||'').match(/(\d+)/); return m ? parseInt(m[1]) : 0; };
+function dl(filename, text, type){
+  const blob = new Blob([text], {type});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+function exportSalesData(){
+  const picked = sales.filter(inHistRange);
+  if(picked.length===0){ toast('ไม่มีรายการขายในช่วงที่เลือก', true); return; }
+  // ป้ายชื่อไฟล์ตามหมวด
+  let scope;
+  if(histMode==='day')        scope = $('histDate').value || 'day';
+  else if(histMode==='month') scope = $('histMonth').value || 'month';
+  else                        scope = 'all';
+  const data = { _app:'LocalPOS', _type:'sales', _mode:histMode, exportedAt:new Date().toISOString(), count:picked.length, sales:picked };
+  dl(`LocalPOS-sales-${scope}.json`, JSON.stringify(data, null, 2), 'application/json;charset=utf-8');
+  toast(`ส่งออกประวัติ ${picked.length} รายการเรียบร้อย 🗄️`);
+}
+function importSalesData(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    try{
+      const data = JSON.parse(e.target.result);
+      const incoming = Array.isArray(data) ? data : (data.sales || []);
+      if(!Array.isArray(incoming) || incoming.length===0){ toast('ไฟล์นี้ไม่มีข้อมูลประวัติการขาย', true); input.value=''; return; }
+      if(!confirm(`นำเข้าประวัติการขาย ${incoming.length} รายการ?\nระบบจะรวมเข้ากับข้อมูลเดิม (บิลที่มีอยู่แล้วจะถูกข้าม ไม่ทับข้อมูลเก่า)`)){ input.value=''; return; }
+      // รวมแบบไม่ซ้ำ: ข้ามบิลที่มี id หรือเลขบิล (no) ตรงกับที่มีอยู่แล้ว
+      const haveId = new Set(sales.map(s=>s.id));
+      const haveNo = new Set(sales.map(s=>s.no));
+      let added = 0, skipped = 0;
+      incoming.forEach(s=>{
+        if(!s || (s.id && haveId.has(s.id)) || (s.no && haveNo.has(s.no))){ skipped++; return; }
+        if(!s.id) s.id = uid();
+        sales.push(s);
+        haveId.add(s.id); if(s.no) haveNo.add(s.no);
+        added++;
+      });
+      sales.sort((a,b)=>new Date(b.date)-new Date(a.date));   // ใหม่สุดอยู่บน
+      // กันเลขบิลชนกันในอนาคต: ดัน SEQ ให้ >= เลขบิลสูงสุด
+      const maxSeq = sales.reduce((mx,s)=>Math.max(mx, seqNo(s.no)), DB.get(K.SEQ,0));
+      DB.set(K.SEQ, maxSeq);
+      saveSales(); renderHistory();
+      toast(`นำเข้าสำเร็จ: เพิ่ม ${added} รายการ${skipped?` · ข้าม ${skipped} (ซ้ำ)`:''}`);
+    }catch(err){ toast('ไฟล์ไม่ถูกต้อง — อ่านข้อมูลไม่ได้', true); }
+    input.value='';
+  };
+  reader.readAsText(file);
 }
 
 /* ============ BACKUP / RESTORE ฐานข้อมูล (localStorage) ============ */
