@@ -46,6 +46,14 @@
   .subnav button:hover{background:var(--panel2); color:var(--text)}
   .subnav button.active{background:var(--primary); color:#fff; border-color:var(--primary)}
 
+  /* ปุ่มกรองแบบ segmented (รายวัน/รายเดือน/ทั้งหมด) */
+  .seg{display:inline-flex; border:1px solid var(--line); border-radius:9px; overflow:hidden}
+  .seg-btn{background:var(--panel2); color:var(--muted); border:none; padding:7px 15px;
+    font-size:13px; font-weight:600; cursor:pointer; transition:.15s}
+  .seg-btn + .seg-btn{border-left:1px solid var(--line)}
+  .seg-btn:hover{color:var(--text)}
+  .seg-btn.active{background:var(--primary); color:#fff}
+
   main{padding:22px; max-width:1300px; margin:0 auto}
   .view{display:none; animation:fade .2s}
   .view.active{display:block}
@@ -350,11 +358,21 @@
       <h2 style="justify-content:space-between;flex-wrap:wrap;gap:10px">
         <span>📜 ประวัติการขาย</span>
         <span style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <input type="month" id="exMonth" style="width:auto;padding:6px 10px;font-size:13px">
-          <button class="btn btn-green btn-sm" onclick="exportExcel()">⬇️ Export Excel</button>
+          <button class="btn btn-green btn-sm" onclick="exportExcel()">⬇️ Export Excel (ตามที่กรอง)</button>
           <button class="btn btn-red btn-sm" onclick="clearHistory()">🗑 ล้างประวัติ</button>
         </span>
       </h2>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+        <span style="font-size:13px;color:var(--muted);font-weight:600">แสดง:</span>
+        <span class="seg" id="histSeg">
+          <button class="seg-btn" data-mode="day" onclick="setHistMode('day')">รายวัน</button>
+          <button class="seg-btn" data-mode="month" onclick="setHistMode('month')">รายเดือน</button>
+          <button class="seg-btn active" data-mode="all" onclick="setHistMode('all')">ทั้งหมด</button>
+        </span>
+        <input type="date"  id="histDate"  style="display:none;width:auto;padding:6px 10px;font-size:13px" onchange="renderHistory()">
+        <input type="month" id="histMonth" style="display:none;width:auto;padding:6px 10px;font-size:13px" onchange="renderHistory()">
+        <span id="histCount" style="font-size:13px;color:var(--muted);margin-left:auto"></span>
+      </div>
       <div class="tbl-wrap">
       <table>
         <thead id="histHead"><!-- คอลัมน์กลางสร้างจากฟิลด์ที่แสดงในหน้าขาย (⚙️ ตั้งค่าฟิลด์) --></thead>
@@ -1228,13 +1246,37 @@ function saleFieldVal(s, f){
 /* ฟิลด์ที่ใช้เป็นคอลัมน์กลางของตารางประวัติ = ฟิลด์ที่กรอกในหน้าขาย (ไม่รวมฟิลด์ระบบ) */
 const histFields = () => fields.filter(f=>!f.sys && f.inPos);
 
-function renderHistory(){
-  // ตั้งค่าเดือนเริ่มต้นให้ช่องเลือกเดือน = เดือนปัจจุบัน (ครั้งแรก)
-  if(!$('exMonth').value){
-    const t = new Date();
-    $('exMonth').value = t.getFullYear() + '-' + String(t.getMonth()+1).padStart(2,'0');
+let histMode = 'all';                          // โหมดกรองประวัติ: 'day' | 'month' | 'all'
+function setHistMode(mode){
+  histMode = mode;
+  document.querySelectorAll('#histSeg .seg-btn').forEach(b=>b.classList.toggle('active', b.dataset.mode===mode));
+  $('histDate').style.display  = mode==='day'   ? '' : 'none';
+  $('histMonth').style.display = mode==='month' ? '' : 'none';
+  renderHistory();
+}
+/* คืน true ถ้าบิลอยู่ในช่วงเวลาที่เลือก (ตามโหมดกรอง) */
+function inHistRange(s){
+  if(histMode==='all') return true;
+  const d = new Date(s.date);
+  if(histMode==='day'){
+    const v = $('histDate').value; if(!v) return true;
+    const [y,m,dd] = v.split('-').map(Number);
+    return d.getFullYear()===y && d.getMonth()+1===m && d.getDate()===dd;
   }
-  const active = sales.filter(s=>!isVoid(s));
+  const v = $('histMonth').value; if(!v) return true;   // month
+  const [y,m] = v.split('-').map(Number);
+  return d.getFullYear()===y && d.getMonth()+1===m;
+}
+
+function renderHistory(){
+  // ตั้งค่าเริ่มต้นของช่องเลือกวัน/เดือน = วันนี้/เดือนนี้ (ครั้งแรก)
+  const t = new Date();
+  const ymNow = t.getFullYear() + '-' + String(t.getMonth()+1).padStart(2,'0');
+  if(!$('histMonth').value) $('histMonth').value = ymNow;
+  if(!$('histDate').value)  $('histDate').value  = ymNow + '-' + String(t.getDate()).padStart(2,'0');
+
+  const shown = sales.filter(inHistRange);                 // บิลในช่วงที่เลือก (รวมบิลที่ยกเลิก)
+  const active = shown.filter(s=>!isVoid(s));
   const revenue  = active.reduce((s,x)=>s+x.total,0);
   const totalDisc= active.reduce((s,x)=>s+x.discount,0);
   const totalItm = active.reduce((s,x)=>s+x.itemCount,0);
@@ -1242,6 +1284,7 @@ function renderHistory(){
   $('statBills').textContent   = active.length;
   $('statDiscount').textContent= baht(totalDisc);
   $('statItems').textContent   = totalItm;
+  $('histCount').textContent   = `${shown.length} บิล`;
 
   const hf = histFields();
   $('histHead').innerHTML = `<tr><th>เลขที่บิล</th><th>วันที่/เวลา</th>`
@@ -1249,7 +1292,8 @@ function renderHistory(){
     + `<th class="num">ชิ้น</th><th class="num">ส่วนลด / Discount</th><th class="num">ยอดสุทธิ</th><th>สถานะ</th><th style="width:170px">จัดการ</th></tr>`;
   const tb = $('histTable');
   if(sales.length===0){ tb.innerHTML = `<tr><td colspan="${7+hf.length}"><div class="empty">ยังไม่มีประวัติการขาย</div></td></tr>`; return; }
-  tb.innerHTML = sales.map(s=>`
+  if(shown.length===0){ tb.innerHTML = `<tr><td colspan="${7+hf.length}"><div class="empty">ไม่มีบิลในช่วงเวลาที่เลือก</div></td></tr>`; return; }
+  tb.innerHTML = shown.map(s=>`
     <tr class="${isVoid(s)?'voided':''}">
       <td><b>${s.no}</b></td>
       <td>${fmtDate(s.date)}</td>
@@ -1351,19 +1395,16 @@ const LUGE = {
 };
 
 function exportExcel(){
-  // เดือนที่เลือก (YYYY-MM) — ถ้าไม่เลือกใช้เดือนปัจจุบัน
-  const sel = ($('exMonth').value || '').split('-');
-  let y, m;
-  if(sel.length===2){ y = parseInt(sel[0]); m = parseInt(sel[1]) - 1; }
-  else { const now = new Date(); y = now.getFullYear(); m = now.getMonth(); }
-  const now = new Date(y, m, 1);
-  const monthSales = sales.filter(s=>{ const d=new Date(s.date); return d.getFullYear()===y && d.getMonth()===m; });
-  if(monthSales.length===0){ toast('เดือนที่เลือกยังไม่มีรายการขาย', true); return; }
+  // เลือกข้อมูลตามหมวดที่เลือกในหน้าประวัติ (รายวัน / รายเดือน / ทั้งหมด)
+  const picked = sales.filter(inHistRange);
+  if(picked.length===0){ toast('ไม่มีรายการขายในช่วงที่เลือก', true); return; }
 
-  // group by day
+  // group by วันที่เต็ม (YYYY-MM-DD) — 1 วัน = 1 ชีต ; รองรับข้ามเดือน/ข้ามปี (โหมด "ทั้งหมด")
   const byDay = {};
-  monthSales.forEach(s=>{ const d=new Date(s.date); const key=d.getDate(); (byDay[key]=byDay[key]||[]).push(s); });
-  const days = Object.keys(byDay).map(Number).sort((a,b)=>a-b);
+  picked.forEach(s=>{ const d=new Date(s.date);
+    const key = d.getFullYear()+'-'+String(d.getMonth()).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    (byDay[key]=byDay[key]||[]).push(s); });
+  const days = Object.keys(byDay).sort();          // string YYYY-MM-DD เรียงตามเวลาได้ตรง
 
   const num    = n => Number(n||0);
   // ราคาต่อรายการสำหรับรายงาน = ยอดที่คิดจริงรวม VAT (ยกเว้นบิล Non-VAT); บิลเก่าก่อนมีระบบ VAT คงค่าเดิม
@@ -1375,7 +1416,6 @@ function exportExcel(){
   };
   const timeOf = iso => { const d=new Date(iso); return d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); };
   const dd     = n => String(n).padStart(2,'0');
-  const beShort= String((y+543)%100).padStart(2,'0');
 
   /* ---------- คอลัมน์แบบไดนามิก: เดินตามลำดับฟิลด์ในหน้า ⚙️ (Package/Total/Discount เป็นฟิลด์ระบบ ย้ายได้) ---------- */
   const pkgs = (products.length ? products : [{id:'_',name:'Package'}]);
@@ -1478,8 +1518,10 @@ function exportExcel(){
   days.forEach(day=>{
     const rows = byDay[day].slice().sort((a,b)=>new Date(a.date)-new Date(b.date));
     const n = rows.length;
-    const sheetName = `${dd(day)}-${dd(m+1)}-${beShort}`;
-    const titleText = '     ' + LUGE.reportTitle + ' ' + `${dd(day)}/${dd(m+1)}/${y}`;
+    const [gy, gmi, gd] = day.split('-').map(Number);        // ปี, เดือน(0-based), วัน ของชีตนี้
+    const beShort = String((gy+543)%100).padStart(2,'0');
+    const sheetName = `${dd(gd)}-${dd(gmi+1)}-${beShort}`;
+    const titleText = '     ' + LUGE.reportTitle + ' ' + `${dd(gd)}/${dd(gmi+1)}/${gy}`;
 
     /* --- แถวหัวตาราง (row 1-8) --- */
     const row1 = '<Row ss:Height="15"/>';
@@ -1610,14 +1652,19 @@ function exportExcel(){
  ${sheets}
 </Workbook>`;
 
-  const monthName = now.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
-  const fname = `Luge - Photo Booth Daily Report ${monthName}.xls`;
+  // ป้ายชื่อไฟล์ตามหมวดที่เลือก
+  let scope;
+  if(histMode==='day')        scope = $('histDate').value || days[0];
+  else if(histMode==='month'){ const [yy,mm]=($('histMonth').value||'').split('-').map(Number);
+    scope = (yy && mm) ? new Date(yy, mm-1, 1).toLocaleDateString('en-GB',{month:'long',year:'numeric'}) : 'Month'; }
+  else                        scope = 'All';
+  const fname = `Luge - Photo Booth Daily Report ${scope}.xls`;
   const blob = new Blob(['﻿'+xml], {type:'application/vnd.ms-excel;charset=utf-8'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = fname; document.body.appendChild(a); a.click();
   document.body.removeChild(a); URL.revokeObjectURL(url);
-  toast(`ส่งออก ${monthSales.length} รายการ (${days.length} วัน) เรียบร้อย`);
+  toast(`ส่งออก ${picked.length} รายการ (${days.length} วัน) เรียบร้อย`);
 }
 
 /* ============ BACKUP / RESTORE ฐานข้อมูล (localStorage) ============ */
