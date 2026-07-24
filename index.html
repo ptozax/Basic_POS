@@ -223,6 +223,7 @@
   <button data-view="products">📦 จัดการสินค้า</button>
   <button data-view="discounts">🏷️ ส่วนลด</button>
   <button data-view="fields">⚙️ ตั้งค่าฟิลด์</button>
+  <button data-view="dbsetting">💾 DB Setting</button>
 </nav>
 
 <main>
@@ -351,10 +352,7 @@
         <span style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <input type="month" id="exMonth" style="width:auto;padding:6px 10px;font-size:13px">
           <button class="btn btn-green btn-sm" onclick="exportExcel()">⬇️ Export Excel</button>
-          <button class="btn btn-ghost btn-sm" onclick="backupDB()">💾 สำรองข้อมูล</button>
-          <button class="btn btn-ghost btn-sm" onclick="$('importFile').click()">📥 นำเข้าข้อมูล</button>
           <button class="btn btn-red btn-sm" onclick="clearHistory()">🗑 ล้างประวัติ</button>
-          <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importDB(this)">
         </span>
       </h2>
       <div class="tbl-wrap">
@@ -363,6 +361,25 @@
         <tbody id="histTable"></tbody>
       </table>
       </div>
+    </div>
+  </section>
+
+  <!-- ============ DB SETTING (สำรอง/กู้คืนข้อมูล) ============ -->
+  <section id="view-dbsetting" class="view">
+    <div class="card">
+      <h2>💾 DB Setting — สำรอง / กู้คืนข้อมูล</h2>
+      <p style="color:var(--muted);font-size:13px;margin:-6px 0 14px">
+        สำรองข้อมูลทั้งหมด (สินค้า, ส่วนลด, ฟิลด์ และประวัติการขาย) เป็นไฟล์ <b>.json</b> เก็บไว้
+        หรือกู้คืนจากไฟล์ที่เคยสำรองไว้
+      </p>
+      <div class="row">
+        <button class="btn btn-primary" onclick="backupDB()">💾 สำรองข้อมูล (ดาวน์โหลดไฟล์)</button>
+        <button class="btn btn-ghost" onclick="$('importFile').click()">📥 นำเข้าข้อมูล (กู้คืนจากไฟล์)</button>
+        <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importDB(this)">
+      </div>
+      <p style="color:var(--red);font-size:12px;margin:14px 0 0">
+        ⚠️ การนำเข้าข้อมูลจะ <b>แทนที่ข้อมูลปัจจุบันทั้งหมด</b> — แนะนำให้สำรองข้อมูลปัจจุบันไว้ก่อน
+      </p>
     </div>
   </section>
 </main>
@@ -565,7 +582,7 @@ function ensureSysFields(){
 }
 
 /* ============ NAVIGATION ============ */
-const SETTINGS_VIEWS = ['products','discounts','fields'];   // หน้าย่อยที่อยู่ใต้ "ตั้งค่า"
+const SETTINGS_VIEWS = ['products','discounts','fields','dbsetting'];   // หน้าย่อยที่อยู่ใต้ "ตั้งค่า"
 function switchView(view){
   const inSettings = SETTINGS_VIEWS.includes(view);
   // สลับ section ที่แสดง
