@@ -139,7 +139,7 @@
   .chk input{width:auto;margin:0;cursor:pointer}
   .badge.vat{color:var(--green)}
   .discount-chip{display:inline-flex;align-items:center;gap:6px;background:var(--panel2);
-    border:1px solid var(--line);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:13px}
+    border:1px solid var(--line);border-radius:10px;padding:13px 16px;cursor:pointer;font-size:15px}
   .discount-chip.sel{border-color:var(--green);background:rgba(34,197,94,.12)}
   .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
 
@@ -230,15 +230,12 @@
             <div id="coCustomFields"></div>
           </div>
 
-          <div class="chips" id="discountChips"></div>
-
-          <!-- ส่วนลดกำหนดเอง (กรอกสด ๆ ต่อบิล) — คิดต่อจากส่วนลดสำเร็จรูปที่เลือกด้านบน -->
-          <div class="fld-row" style="margin-bottom:10px">
-            <div class="field"><label style="font-size:11px;color:var(--muted);font-weight:600">ส่วนลดเอง (%)</label>
-              <input type="number" id="cdPct" min="0" max="100" step="any" placeholder="0" style="padding:8px 10px;font-size:13px" oninput="updateSummary()"></div>
-            <div class="field"><label style="font-size:11px;color:var(--muted);font-weight:600">ส่วนลดเอง (฿)</label>
-              <input type="number" id="cdBaht" min="0" step="any" placeholder="0.00" style="padding:8px 10px;font-size:13px" oninput="updateSummary()"></div>
-          </div>
+          <!-- ปุ่มเปิดเมนูส่วนลด (popup) — สรุปส่วนลดที่เลือกไว้บนปุ่ม -->
+          <button class="btn btn-ghost" id="discountBtn" onclick="openDiscountMenu()"
+            style="width:100%;display:flex;align-items:center;gap:10px;justify-content:space-between;margin-bottom:10px;text-align:left">
+            <span style="white-space:nowrap">🏷️ ส่วนลด</span>
+            <span id="discountBtnSummary" style="color:var(--muted);font-size:13px;font-weight:400;white-space:normal;text-align:right">— ไม่มี —</span>
+          </button>
 
           <div class="summary">
             <div class="line"><span>ยอดรวม (ก่อน VAT)</span><span id="sumSubtotal">฿0.00</span></div>
@@ -409,6 +406,27 @@
     <div class="foot">
       <button class="btn btn-ghost" id="fCancelBtn" onclick="closeFieldModal()">ยกเลิก</button>
       <button class="btn btn-primary" id="fSaveBtn" onclick="saveField()">+ เพิ่มฟิลด์</button>
+    </div>
+  </div>
+</div>
+
+<!-- modal: เมนูส่วนลด (หน้าขาย) -->
+<div class="modal-bg" id="discountMenuModal">
+  <div class="modal">
+    <h3>🏷️ เมนูส่วนลด (Discount Menu)</h3>
+    <p style="color:var(--muted);font-size:13px;margin:-6px 0 12px">เลือกส่วนลดสำเร็จรูป (เลือกได้หลายอัน) และ/หรือกรอกส่วนลดเองต่อบิล</p>
+    <div class="chips" id="discountChips"></div>
+
+    <!-- ส่วนลดกำหนดเอง (กรอกสด ๆ ต่อบิล) — คิดต่อจากส่วนลดสำเร็จรูปที่เลือกด้านบน -->
+    <div class="fld-row" style="margin-bottom:4px">
+      <div class="field"><label style="font-size:11px;color:var(--muted);font-weight:600">ส่วนลดเอง (%)</label>
+        <input type="number" id="cdPct" min="0" max="100" step="any" placeholder="0" style="padding:8px 10px;font-size:13px" oninput="updateSummary()"></div>
+      <div class="field"><label style="font-size:11px;color:var(--muted);font-weight:600">ส่วนลดเอง (฿)</label>
+        <input type="number" id="cdBaht" min="0" step="any" placeholder="0.00" style="padding:8px 10px;font-size:13px" oninput="updateSummary()"></div>
+    </div>
+    <div class="foot">
+      <button class="btn btn-ghost" onclick="clearDiscounts()">ล้างส่วนลด</button>
+      <button class="btn btn-primary" onclick="closeDiscountMenu()">เสร็จสิ้น</button>
     </div>
   </div>
 </div>
@@ -1029,7 +1047,10 @@ function renderCart(){
 
 function renderDiscountChips(){
   const el = $('discountChips');
-  if(discounts.length===0){ el.innerHTML=''; return; }
+  if(discounts.length===0){
+    el.innerHTML = `<div class="empty" style="width:100%">ยังไม่มีส่วนลดสำเร็จรูป — เพิ่มได้ที่หน้า 🏷️ ส่วนลด หรือกรอกส่วนลดเองด้านล่าง</div>`;
+    return;
+  }
   el.innerHTML = discounts.map(d=>`
     <div class="discount-chip ${selectedDiscountIds.includes(d.id)?'sel':''}" onclick="toggleDiscount('${d.id}')">
       ${selectedDiscountIds.includes(d.id)?'✓ ':''}${esc(d.name)} <small style="color:var(--muted)">(${discValueLabel(d)})</small>
@@ -1041,6 +1062,27 @@ function toggleDiscount(id){
   if(i>=0) selectedDiscountIds.splice(i,1);
   else selectedDiscountIds.push(id);
   renderDiscountChips(); updateSummary();
+}
+
+/* ---------- เมนูส่วนลด (popup หน้าขาย) ---------- */
+function openDiscountMenu(){ renderDiscountChips(); $('discountMenuModal').classList.add('show'); }
+function closeDiscountMenu(){ $('discountMenuModal').classList.remove('show'); }
+function clearDiscounts(){
+  selectedDiscountIds = [];
+  $('cdPct').value=''; $('cdBaht').value='';
+  renderDiscountChips(); updateSummary();
+}
+/* สรุปส่วนลดที่เลือกไว้ แสดงบนปุ่ม Discount ในหน้าขาย */
+function updateDiscountBtn(){
+  const el = $('discountBtnSummary'); if(!el) return;
+  const parts = discounts.filter(d=>selectedDiscountIds.includes(d.id)).map(d=>d.name);
+  const pct  = Math.min(100, Math.max(0, parseFloat($('cdPct').value)  || 0));
+  const bht  = Math.max(0, parseFloat($('cdBaht').value) || 0);
+  if(pct>0) parts.push('เอง '+pct+'%');
+  if(bht>0) parts.push('เอง '+baht(bht));
+  const active = parts.length>0;
+  el.textContent = active ? parts.join(', ') : '— ไม่มี —';
+  el.style.color = active ? 'var(--amber)' : 'var(--muted)';
 }
 
 function calcTotals(){
@@ -1071,6 +1113,7 @@ function updateSummary(){
   $('sumDiscount').textContent = '-' + baht(discount);
   $('sumTotal').textContent = baht(total);
   $('lineVat').style.display = cart.length ? '' : 'none';
+  updateDiscountBtn();
 }
 
 function checkout(){
@@ -1594,6 +1637,7 @@ function importDB(input){
 function closeModal(){ $('modalBg').classList.remove('show'); }
 $('modalBg').onclick = e=>{ if(e.target===$('modalBg')) closeModal(); };
 $('fieldModal').onclick = e=>{ if(e.target===$('fieldModal')) closeFieldModal(); };
+$('discountMenuModal').onclick = e=>{ if(e.target===$('discountMenuModal')) closeDiscountMenu(); };
 $('productModal').onclick = e=>{ if(e.target===$('productModal')) closeProductModal(); };
 $('discountModal').onclick = e=>{ if(e.target===$('discountModal')) closeDiscountModal(); };
 
