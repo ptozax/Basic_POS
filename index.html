@@ -35,6 +35,17 @@
   nav button:hover{background:var(--panel2); color:var(--text)}
   nav button.active{background:var(--primary); color:#fff}
 
+  /* แถบเมนูย่อยของหน้า "ตั้งค่า" */
+  .subnav{display:flex; gap:6px; flex-wrap:wrap; margin:0; padding:12px 22px;
+    background:var(--panel); border-bottom:1px solid var(--line);
+    position:sticky; top:61px; z-index:49}
+  .subnav button{
+    background:transparent; border:1px solid var(--line); color:var(--muted);
+    padding:8px 15px; border-radius:9px; cursor:pointer; font-size:13px; font-weight:600; transition:.15s;
+  }
+  .subnav button:hover{background:var(--panel2); color:var(--text)}
+  .subnav button.active{background:var(--primary); color:#fff; border-color:var(--primary)}
+
   main{padding:22px; max-width:1300px; margin:0 auto}
   .view{display:none; animation:fade .2s}
   .view.active{display:block}
@@ -200,14 +211,19 @@
 <body>
 <header>
   <h1><span class="logo">🛒</span> LocalPOS</h1>
-  <nav>
+  <nav class="topnav">
     <button data-view="pos" class="active">💰 ขายสินค้า</button>
-    <button data-view="products">📦 สินค้า</button>
-    <button data-view="discounts">🏷️ ส่วนลด</button>
-    <button data-view="fields">⚙️ ตั้งค่าฟิลด์</button>
     <button data-view="history">📜 ประวัติการขาย</button>
+    <button data-nav="settings" data-view="products">⚙️ ตั้งค่า</button>
   </nav>
 </header>
+
+<!-- เมนูย่อยหน้า "ตั้งค่า" — แสดงเฉพาะเมื่ออยู่ในหมวดตั้งค่า -->
+<nav class="subnav" id="settingsSubnav" style="display:none">
+  <button data-view="products">📦 จัดการสินค้า</button>
+  <button data-view="discounts">🏷️ ส่วนลด</button>
+  <button data-view="fields">⚙️ ตั้งค่าฟิลด์</button>
+</nav>
 
 <main>
   <!-- ============ POS / SELL ============ -->
@@ -549,16 +565,28 @@ function ensureSysFields(){
 }
 
 /* ============ NAVIGATION ============ */
-document.querySelectorAll('nav button').forEach(b=>{
-  b.onclick = ()=>{
-    document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
-    document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
-    b.classList.add('active');
-    $('view-'+b.dataset.view).classList.add('active');
-    if(b.dataset.view==='history') renderHistory();
-    if(b.dataset.view==='pos'){ renderPosProducts(); renderCoCustomFields(); }
-    if(b.dataset.view==='fields') renderFields();
-  };
+const SETTINGS_VIEWS = ['products','discounts','fields'];   // หน้าย่อยที่อยู่ใต้ "ตั้งค่า"
+function switchView(view){
+  const inSettings = SETTINGS_VIEWS.includes(view);
+  // สลับ section ที่แสดง
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  $('view-'+view).classList.add('active');
+  // ไฮไลต์ปุ่มบนแถบเมนูหลัก (หน้าตั้งค่า → ไฮไลต์ปุ่ม "⚙️ ตั้งค่า")
+  document.querySelectorAll('nav.topnav button').forEach(x=>
+    x.classList.toggle('active', inSettings ? x.dataset.nav==='settings' : x.dataset.view===view));
+  // แถบเมนูย่อย: แสดงเฉพาะในหมวดตั้งค่า + ไฮไลต์หน้าที่เลือก
+  $('settingsSubnav').style.display = inSettings ? '' : 'none';
+  document.querySelectorAll('#settingsSubnav button').forEach(x=>
+    x.classList.toggle('active', x.dataset.view===view));
+  // เรนเดอร์เนื้อหาตามหน้า
+  if(view==='history') renderHistory();
+  if(view==='pos'){ renderPosProducts(); renderCoCustomFields(); }
+  if(view==='products') renderProducts();
+  if(view==='discounts') renderDiscounts();
+  if(view==='fields') renderFields();
+}
+document.querySelectorAll('nav.topnav button, #settingsSubnav button').forEach(b=>{
+  b.onclick = ()=>switchView(b.dataset.view);
 });
 
 /* ============ PRODUCTS CRUD ============ */
