@@ -258,21 +258,13 @@
   <!-- ============ PRODUCTS ============ -->
   <section id="view-products" class="view">
     <div class="card">
-      <h2>📦 จัดการสินค้า</h2>
-      <div class="row">
-        <div class="field"><label>ชื่อสินค้า</label><input id="pName" placeholder="เช่น กาแฟเย็น"></div>
-        <div class="field" style="max-width:140px"><label>ราคา (฿)</label><input id="pPrice" type="number" min="0" step="0.01" placeholder="0.00"></div>
-        <div class="field" style="max-width:120px"><label>สต็อก</label><input id="pStock" type="number" min="0" step="1" placeholder="0"></div>
-        <div class="field" style="flex:0 0 auto;min-width:0"><label>&nbsp;</label>
-          <label class="chk" title="ติ๊ก = ขายได้ไม่จำกัด ไม่ตัดสต็อก"><input type="checkbox" id="pUnlimited" onchange="onPUnlimitedChange()"> สต็อกไม่จำกัด (∞)</label>
-        </div>
-        <div class="field" style="max-width:160px"><label>หมวดหมู่</label><input id="pCat" placeholder="เช่น เครื่องดื่ม"></div>
-        <div class="field" style="max-width:190px"><label>VAT</label>
-          <label class="chk" title="ติ๊ก = ราคารวม VAT อยู่แล้ว | ไม่ติ๊ก = ราคาไม่รวม VAT จะบวก VAT 7% ตอนจ่าย"><input type="checkbox" id="pVat"> ราคารวม VAT 7%</label>
-        </div>
-        <button class="btn btn-primary" id="pSaveBtn" onclick="saveProduct()">+ เพิ่มสินค้า</button>
-        <button class="btn btn-ghost" id="pCancelBtn" onclick="resetProductForm()" style="display:none">ยกเลิก</button>
-      </div>
+      <h2 style="justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <span>📦 จัดการสินค้า</span>
+        <button class="btn btn-primary btn-sm" onclick="openProductModal()">+ เพิ่มสินค้า</button>
+      </h2>
+      <p style="color:var(--muted);font-size:13px;margin:-6px 0 0">
+        กด <b>+ เพิ่มสินค้า</b> เพื่อสร้างรายการใหม่ หรือกด <b>แก้ไข</b> ในตารางด้านล่าง — หน้าต่างกรอกข้อมูลจะเปิดขึ้นมา
+      </p>
     </div>
     <div class="card">
       <input class="search" id="prodSearch" placeholder="🔍 ค้นหาสินค้า...">
@@ -288,16 +280,13 @@
   <!-- ============ DISCOUNTS ============ -->
   <section id="view-discounts" class="view">
     <div class="card">
-      <h2>🏷️ จัดการประเภทส่วนลด</h2>
-      <div class="row">
-        <div class="field"><label>ชื่อส่วนลด</label><input id="dName" placeholder="เช่น สมาชิก VIP"></div>
-        <div class="field" style="max-width:200px"><label>ประเภท</label>
-          <select id="dType" onchange="onDiscTypeChange()"><option value="percent">เปอร์เซ็นต์ (%)</option><option value="fixed">จำนวนเงิน (฿)</option><option value="novat">เอา VAT ออก (Non-VAT)</option></select>
-        </div>
-        <div class="field" id="dValueField" style="max-width:140px"><label>ค่าส่วนลด</label><input id="dValue" type="number" min="0" step="0.01" placeholder="0"></div>
-        <button class="btn btn-primary" id="dSaveBtn" onclick="saveDiscount()">+ เพิ่มส่วนลด</button>
-        <button class="btn btn-ghost" id="dCancelBtn" onclick="resetDiscountForm()" style="display:none">ยกเลิก</button>
-      </div>
+      <h2 style="justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <span>🏷️ จัดการประเภทส่วนลด</span>
+        <button class="btn btn-primary btn-sm" onclick="openDiscountModal()">+ เพิ่มส่วนลด</button>
+      </h2>
+      <p style="color:var(--muted);font-size:13px;margin:-6px 0 0">
+        กด <b>+ เพิ่มส่วนลด</b> เพื่อสร้างประเภทใหม่ หรือกด <b>แก้ไข</b> ในตารางด้านล่าง — หน้าต่างกรอกข้อมูลจะเปิดขึ้นมา
+      </p>
     </div>
     <div class="card">
       <div class="tbl-wrap">
@@ -312,51 +301,13 @@
   <!-- ============ CUSTOM FIELDS (ตั้งค่าฟิลด์) ============ -->
   <section id="view-fields" class="view">
     <div class="card">
-      <h2>⚙️ ตั้งค่าฟิลด์ข้อมูล (Custom Fields)</h2>
-      <p style="color:var(--muted);font-size:13px;margin:-6px 0 12px">
-        แค่กรอก <b>ชื่อฟิลด์</b> เลือก <b>ชนิดข้อมูล</b> แล้วกดเพิ่ม — ตั้งค่าสี / การแสดงผล ได้ใน "ตั้งค่าเพิ่มเติม"
+      <h2 style="justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <span>⚙️ ตั้งค่าฟิลด์ข้อมูล (Custom Fields)</span>
+        <button class="btn btn-primary btn-sm" onclick="openFieldModal()">+ เพิ่มฟิลด์</button>
+      </h2>
+      <p style="color:var(--muted);font-size:13px;margin:-6px 0 0">
+        กด <b>+ เพิ่มฟิลด์</b> เพื่อสร้างฟิลด์ใหม่ หรือกด <b>แก้ไข</b> ในตารางด้านล่าง — หน้าต่างตั้งค่าจะเปิดขึ้นมาให้กรอก
       </p>
-      <div class="edit-banner" id="fEditBanner" style="display:none">✏️ กำลังแก้ไขฟิลด์: <b id="fEditName"></b></div>
-      <div class="row">
-        <div class="field" style="min-width:200px"><label>ชื่อฟิลด์ (Label)</label><input id="fLabel" placeholder="เช่น ช่องทางจอง" onkeydown="if(event.key==='Enter')saveField()"></div>
-        <div class="field" style="max-width:190px"><label>ชนิดข้อมูล</label>
-          <select id="fType" onchange="onFieldTypeChange()">
-            <option value="text">ข้อความ (Text)</option>
-            <option value="number">ตัวเลข (Number)</option>
-            <option value="select">ตัวเลือก (Dropdown / เลือก)</option>
-            <option value="time">เวลา (Time)</option>
-          </select>
-        </div>
-        <div class="field" id="fOptionsField" style="display:none;min-width:220px">
-          <label>ตัวเลือก (คั่นด้วย ,)</label>
-          <input id="fOptions" placeholder="เช่น Walk In, OTA, Agent" onkeydown="if(event.key==='Enter')saveField()">
-        </div>
-        <button class="btn btn-primary" id="fSaveBtn" onclick="saveField()">+ เพิ่มฟิลด์</button>
-        <button class="btn btn-ghost" id="fCancelBtn" onclick="resetFieldForm()" style="display:none">ยกเลิก</button>
-      </div>
-      <details class="adv" id="fAdv">
-        <summary>ตั้งค่าเพิ่มเติม — สี, การแสดงผล, รวมยอด</summary>
-        <div class="row">
-          <div class="field" id="fSelModeField" style="display:none;max-width:190px"><label>การเลือก (Selection)</label>
-            <select id="fSelMode">
-              <option value="single">เลือกอย่างเดียว (Single)</option>
-              <option value="multi">เลือกได้หลายอัน (Multi)</option>
-            </select>
-          </div>
-          <div class="field" style="max-width:110px"><label>สีหัวคอลัมน์</label>
-            <input type="color" id="fColor" value="#66CCFF" style="height:42px;padding:4px;cursor:pointer">
-          </div>
-          <div class="field" style="flex:0 0 auto;min-width:0"><label>&nbsp;</label>
-            <label class="chk"><input type="checkbox" id="fInPos" checked> แสดงในหน้าขาย (POS)</label>
-          </div>
-          <div class="field" style="flex:0 0 auto;min-width:0"><label>&nbsp;</label>
-            <label class="chk"><input type="checkbox" id="fInExcel" checked> แสดงใน Excel</label>
-          </div>
-          <div class="field" style="flex:0 0 auto;min-width:0"><label>&nbsp;</label>
-            <label class="chk" title="ใส่ผลรวม SUM ของคอลัมน์นี้ในแถวรวมท้ายตาราง (เหมาะกับฟิลด์ตัวเลข)"><input type="checkbox" id="fSum"> รวมยอด (SUM) ท้ายตาราง</label>
-          </div>
-        </div>
-      </details>
       <p style="color:var(--muted);font-size:12px;margin:12px 0 0">
         คอลัมน์ในรายงาน Excel เรียงตามลำดับฟิลด์ในตารางด้านล่าง — ลากที่ ⠿ หรือกด ▲▼ เพื่อย้าย
         &nbsp;•&nbsp; คลิกปุ่ม ✔/✕ ในช่อง Excel / หน้าขาย เพื่อเปิด-ปิดได้ทันที
@@ -409,6 +360,97 @@
     <h3 id="modalTitle">รายละเอียด</h3>
     <div id="modalBody"></div>
     <div class="foot"><button class="btn btn-ghost" onclick="closeModal()">ปิด</button></div>
+  </div>
+</div>
+
+<!-- modal: เพิ่ม/แก้ไขฟิลด์ข้อมูล -->
+<div class="modal-bg" id="fieldModal">
+  <div class="modal">
+    <h3 id="fModalTitle">+ เพิ่มฟิลด์</h3>
+    <div class="edit-banner" id="fEditBanner" style="display:none">✏️ กำลังแก้ไขฟิลด์: <b id="fEditName"></b></div>
+    <div class="row">
+      <div class="field" style="min-width:200px"><label>ชื่อฟิลด์ (Label)</label><input id="fLabel" placeholder="เช่น ช่องทางจอง" onkeydown="if(event.key==='Enter')saveField()"></div>
+      <div class="field" style="max-width:190px"><label>ชนิดข้อมูล</label>
+        <select id="fType" onchange="onFieldTypeChange()">
+          <option value="text">ข้อความ (Text)</option>
+          <option value="number">ตัวเลข (Number)</option>
+          <option value="select">ตัวเลือก (Dropdown / เลือก)</option>
+          <option value="time">เวลา (Time)</option>
+        </select>
+      </div>
+      <div class="field" id="fOptionsField" style="display:none;min-width:220px">
+        <label>ตัวเลือก (คั่นด้วย ,)</label>
+        <input id="fOptions" placeholder="เช่น Walk In, OTA, Agent" onkeydown="if(event.key==='Enter')saveField()">
+      </div>
+    </div>
+    <details class="adv" id="fAdv">
+      <summary>ตั้งค่าเพิ่มเติม — สี, การแสดงผล, รวมยอด</summary>
+      <div class="row">
+        <div class="field" id="fSelModeField" style="display:none;max-width:190px"><label>การเลือก (Selection)</label>
+          <select id="fSelMode">
+            <option value="single">เลือกอย่างเดียว (Single)</option>
+            <option value="multi">เลือกได้หลายอัน (Multi)</option>
+          </select>
+        </div>
+        <div class="field" style="max-width:110px"><label>สีหัวคอลัมน์</label>
+          <input type="color" id="fColor" value="#66CCFF" style="height:42px;padding:4px;cursor:pointer">
+        </div>
+        <div class="field" style="flex:0 0 auto;min-width:0"><label>&nbsp;</label>
+          <label class="chk"><input type="checkbox" id="fInPos" checked> แสดงในหน้าขาย (POS)</label>
+        </div>
+        <div class="field" style="flex:0 0 auto;min-width:0"><label>&nbsp;</label>
+          <label class="chk"><input type="checkbox" id="fInExcel" checked> แสดงใน Excel</label>
+        </div>
+        <div class="field" style="flex:0 0 auto;min-width:0"><label>&nbsp;</label>
+          <label class="chk" title="ใส่ผลรวม SUM ของคอลัมน์นี้ในแถวรวมท้ายตาราง (เหมาะกับฟิลด์ตัวเลข)"><input type="checkbox" id="fSum"> รวมยอด (SUM) ท้ายตาราง</label>
+        </div>
+      </div>
+    </details>
+    <div class="foot">
+      <button class="btn btn-ghost" id="fCancelBtn" onclick="closeFieldModal()">ยกเลิก</button>
+      <button class="btn btn-primary" id="fSaveBtn" onclick="saveField()">+ เพิ่มฟิลด์</button>
+    </div>
+  </div>
+</div>
+
+<!-- modal: เพิ่ม/แก้ไขสินค้า -->
+<div class="modal-bg" id="productModal">
+  <div class="modal">
+    <h3 id="pModalTitle">+ เพิ่มสินค้า</h3>
+    <div class="row">
+      <div class="field"><label>ชื่อสินค้า</label><input id="pName" placeholder="เช่น กาแฟเย็น" onkeydown="if(event.key==='Enter')saveProduct()"></div>
+      <div class="field" style="max-width:140px"><label>ราคา (฿)</label><input id="pPrice" type="number" min="0" step="0.01" placeholder="0.00"></div>
+      <div class="field" style="max-width:120px"><label>สต็อก</label><input id="pStock" type="number" min="0" step="1" placeholder="0"></div>
+      <div class="field" style="flex:0 0 auto;min-width:0"><label>&nbsp;</label>
+        <label class="chk" title="ติ๊ก = ขายได้ไม่จำกัด ไม่ตัดสต็อก"><input type="checkbox" id="pUnlimited" onchange="onPUnlimitedChange()"> สต็อกไม่จำกัด (∞)</label>
+      </div>
+      <div class="field" style="max-width:160px"><label>หมวดหมู่</label><input id="pCat" placeholder="เช่น เครื่องดื่ม"></div>
+      <div class="field" style="max-width:190px"><label>VAT</label>
+        <label class="chk" title="ติ๊ก = ราคารวม VAT อยู่แล้ว | ไม่ติ๊ก = ราคาไม่รวม VAT จะบวก VAT 7% ตอนจ่าย"><input type="checkbox" id="pVat"> ราคารวม VAT 7%</label>
+      </div>
+    </div>
+    <div class="foot">
+      <button class="btn btn-ghost" id="pCancelBtn" onclick="closeProductModal()">ยกเลิก</button>
+      <button class="btn btn-primary" id="pSaveBtn" onclick="saveProduct()">+ เพิ่มสินค้า</button>
+    </div>
+  </div>
+</div>
+
+<!-- modal: เพิ่ม/แก้ไขส่วนลด -->
+<div class="modal-bg" id="discountModal">
+  <div class="modal">
+    <h3 id="dModalTitle">+ เพิ่มส่วนลด</h3>
+    <div class="row">
+      <div class="field"><label>ชื่อส่วนลด</label><input id="dName" placeholder="เช่น สมาชิก VIP" onkeydown="if(event.key==='Enter')saveDiscount()"></div>
+      <div class="field" style="max-width:200px"><label>ประเภท</label>
+        <select id="dType" onchange="onDiscTypeChange()"><option value="percent">เปอร์เซ็นต์ (%)</option><option value="fixed">จำนวนเงิน (฿)</option><option value="novat">เอา VAT ออก (Non-VAT)</option></select>
+      </div>
+      <div class="field" id="dValueField" style="max-width:140px"><label>ค่าส่วนลด</label><input id="dValue" type="number" min="0" step="0.01" placeholder="0" onkeydown="if(event.key==='Enter')saveDiscount()"></div>
+    </div>
+    <div class="foot">
+      <button class="btn btn-ghost" id="dCancelBtn" onclick="closeDiscountModal()">ยกเลิก</button>
+      <button class="btn btn-primary" id="dSaveBtn" onclick="saveDiscount()">+ เพิ่มส่วนลด</button>
+    </div>
   </div>
 </div>
 
@@ -547,7 +589,7 @@ function saveProduct(){
     products.push({id:uid(), name, price, stock, cat, vat, unlimited});
     toast('เพิ่มสินค้าเรียบร้อย');
   }
-  saveProducts(); resetProductForm(); renderProducts(); renderPosProducts();
+  saveProducts(); closeProductModal(); renderProducts(); renderPosProducts();
 }
 
 function editProduct(id){
@@ -555,8 +597,9 @@ function editProduct(id){
   editProductId = id;
   $('pName').value=p.name; $('pPrice').value=p.price; $('pStock').value=p.unlimited?'':p.stock; $('pCat').value=p.cat||''; $('pVat').checked=!!p.vat;
   $('pUnlimited').checked = !!p.unlimited; onPUnlimitedChange();
-  $('pSaveBtn').textContent='💾 บันทึกการแก้ไข'; $('pCancelBtn').style.display='';
-  $('pName').focus(); window.scrollTo({top:0,behavior:'smooth'});
+  $('pModalTitle').textContent='✏️ แก้ไขสินค้า'; $('pSaveBtn').textContent='💾 บันทึกการแก้ไข';
+  $('productModal').classList.add('show');
+  $('pName').focus();
 }
 
 function deleteProduct(id){
@@ -571,8 +614,12 @@ function resetProductForm(){
   ['pName','pPrice','pStock','pCat'].forEach(id=>$(id).value='');
   $('pVat').checked=false;
   $('pUnlimited').checked=false; onPUnlimitedChange();
-  $('pSaveBtn').textContent='+ เพิ่มสินค้า'; $('pCancelBtn').style.display='none';
+  $('pModalTitle').textContent='+ เพิ่มสินค้า'; $('pSaveBtn').textContent='+ เพิ่มสินค้า';
 }
+
+/* เปิด/ปิด หน้าต่าง (popup) เพิ่ม-แก้ไขสินค้า */
+function openProductModal(){ resetProductForm(); $('productModal').classList.add('show'); $('pName').focus(); }
+function closeProductModal(){ $('productModal').classList.remove('show'); resetProductForm(); }
 
 /* ============ DISCOUNTS CRUD ============ */
 const VAT_RATE = 0.07;                                    // อัตรา VAT 7%
@@ -622,15 +669,16 @@ function saveDiscount(){
     discounts.push({id:uid(), name, type, value});
     toast('เพิ่มส่วนลดเรียบร้อย');
   }
-  saveDiscounts(); resetDiscountForm(); renderDiscounts(); renderDiscountChips();
+  saveDiscounts(); closeDiscountModal(); renderDiscounts(); renderDiscountChips();
 }
 
 function editDiscount(id){
   const d = discounts.find(x=>x.id===id); if(!d) return;
   editDiscountId = id;
   $('dName').value=d.name; $('dType').value=d.type; $('dValue').value=d.value; onDiscTypeChange();
-  $('dSaveBtn').textContent='💾 บันทึกการแก้ไข'; $('dCancelBtn').style.display='';
-  $('dName').focus(); window.scrollTo({top:0,behavior:'smooth'});
+  $('dModalTitle').textContent='✏️ แก้ไขส่วนลด'; $('dSaveBtn').textContent='💾 บันทึกการแก้ไข';
+  $('discountModal').classList.add('show');
+  $('dName').focus();
 }
 
 function deleteDiscount(id){
@@ -644,8 +692,12 @@ function deleteDiscount(id){
 function resetDiscountForm(){
   editDiscountId=null;
   $('dName').value=''; $('dValue').value=''; $('dType').value='percent'; onDiscTypeChange();
-  $('dSaveBtn').textContent='+ เพิ่มส่วนลด'; $('dCancelBtn').style.display='none';
+  $('dModalTitle').textContent='+ เพิ่มส่วนลด'; $('dSaveBtn').textContent='+ เพิ่มส่วนลด';
 }
+
+/* เปิด/ปิด หน้าต่าง (popup) เพิ่ม-แก้ไขส่วนลด */
+function openDiscountModal(){ resetDiscountForm(); $('discountModal').classList.add('show'); $('dName').focus(); }
+function closeDiscountModal(){ $('discountModal').classList.remove('show'); resetDiscountForm(); }
 
 /* ============ (ยุบแล้ว) ผู้ขาย/วิธีชำระเงิน/ที่มาลูกค้า/ช่างภาพ/โปรแกรม → จัดการที่หน้า ⚙️ ตั้งค่าฟิลด์ ============ */
 
@@ -759,7 +811,7 @@ function saveField(){
     Object.assign(editing, {label, color, inExcel});
     if(editing.sys==='remark') editing.inPos = $('fInPos').checked;
     toast('แก้ไขฟิลด์เรียบร้อย');
-    saveFields(); resetFieldForm(); renderFields(); renderCoCustomFields();
+    saveFields(); closeFieldModal(); renderFields(); renderCoCustomFields();
     return;
   }
 
@@ -779,7 +831,7 @@ function saveField(){
     if(at<0) fields.push(nf); else fields.splice(at, 0, nf);
     toast('เพิ่มฟิลด์เรียบร้อย — ลาก ⠿ เพื่อย้ายตำแหน่งได้');
   }
-  saveFields(); resetFieldForm(); renderFields(); renderCoCustomFields();
+  saveFields(); closeFieldModal(); renderFields(); renderCoCustomFields();
 }
 
 function editField(id){
@@ -795,8 +847,9 @@ function editField(id){
   $('fEditBanner').style.display=''; $('fEditName').textContent = f.label;
   $('fAdv').open = true;                       // เปิดตั้งค่าเพิ่มเติมให้เห็นค่าปัจจุบันตอนแก้ไข
   renderFields();                              // ไฮไลต์แถวที่กำลังแก้ไข
-  $('fSaveBtn').textContent='💾 บันทึกการแก้ไข'; $('fCancelBtn').style.display='';
-  $('fLabel').focus(); window.scrollTo({top:0,behavior:'smooth'});
+  $('fModalTitle').textContent = '✏️ แก้ไขฟิลด์'; $('fSaveBtn').textContent='💾 บันทึกการแก้ไข';
+  $('fieldModal').classList.add('show');
+  $('fLabel').focus();
 }
 
 function deleteField(id){
@@ -826,7 +879,18 @@ function resetFieldForm(){
   $('fEditBanner').style.display='none';
   $('fAdv').open = false;
   if(wasEditing) renderFields();               // เอาไฮไลต์แถวที่แก้ไขออก
-  $('fSaveBtn').textContent='+ เพิ่มฟิลด์'; $('fCancelBtn').style.display='none';
+  $('fModalTitle').textContent='+ เพิ่มฟิลด์'; $('fSaveBtn').textContent='+ เพิ่มฟิลด์';
+}
+
+/* เปิด/ปิด หน้าต่าง (popup) เพิ่ม-แก้ไขฟิลด์ */
+function openFieldModal(){
+  resetFieldForm();                            // เริ่มฟอร์มเปล่าโหมด "เพิ่ม"
+  $('fieldModal').classList.add('show');
+  $('fLabel').focus();
+}
+function closeFieldModal(){
+  $('fieldModal').classList.remove('show');
+  resetFieldForm();                            // เคลียร์สถานะกำลังแก้ไข + เอาไฮไลต์ออก
 }
 
 /* ---------- multi-select dropdown (หน้าขาย) ---------- */
@@ -1529,6 +1593,9 @@ function importDB(input){
 /* ============ helpers / modal ============ */
 function closeModal(){ $('modalBg').classList.remove('show'); }
 $('modalBg').onclick = e=>{ if(e.target===$('modalBg')) closeModal(); };
+$('fieldModal').onclick = e=>{ if(e.target===$('fieldModal')) closeFieldModal(); };
+$('productModal').onclick = e=>{ if(e.target===$('productModal')) closeProductModal(); };
+$('discountModal').onclick = e=>{ if(e.target===$('discountModal')) closeDiscountModal(); };
 
 function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function fmtDate(iso){
